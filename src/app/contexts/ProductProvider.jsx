@@ -21,6 +21,11 @@ export const ProductProvider = ({ children }) => {
         });
     } 
 
+    // Product fetch object
+    const get = (id) => {
+        return products[id];
+    }
+
     //Local Storage load    TODO: Remove when replacing with API call, just here for testing 
     useEffect(() => {
         if (!dataLoaded) {
@@ -53,6 +58,7 @@ export const ProductProvider = ({ children }) => {
     const value = {
         products,
         create,
+        get,
     }
 
     return (
