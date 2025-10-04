@@ -1,6 +1,7 @@
+"use client"
 //Gets commuters and can mutate information
 import { useState } from 'react';
-import CommuterContext from "./CommuterContext";
+import { CommuterContext } from "./CommuterContext";
 
 export const CommuterProvider = ({ children }) => {
     const [commuters, setCommuters] = useState([]);   //Query from DB
