@@ -12,4 +12,14 @@ export const CommuterProvider = ({ children }) => {
         firstName;
         lastName;
     }
+
+    const value = {
+        commuters,
+    }
+
+    return (
+        <CommuterContext.Provider value={value}>
+            {children}
+        </CommuterContext.Provider>
+    )
 }

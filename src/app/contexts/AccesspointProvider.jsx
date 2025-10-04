@@ -10,4 +10,14 @@ export const AccesspointProvider = ({ children }) => {
         numProducts;    
         nearestStation;
     } 
+
+    const value = {
+        accessPoints,
+    }
+    
+    return (
+        <AccesspointContext.Provider value={value}>
+            {children}
+        </AccesspointContext.Provider>
+    )
 }

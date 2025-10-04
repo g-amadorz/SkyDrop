@@ -12,4 +12,14 @@ export const ShipperProvider = ({ children }) => {
         pn;
         productId;
     } 
+
+    const value = {
+        shippers,
+    }
+
+    return (
+        <ShipperContext.Provider value={value}>
+            {children}
+        </ShipperContext.Provider>
+    )
 }

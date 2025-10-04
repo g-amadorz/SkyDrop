@@ -13,4 +13,13 @@ export const ProductProvider = ({ children }) => {
         commuterPN;     //Phone number of commuter
     } 
 
+    const value = {
+        products
+    }
+
+    return (
+        <ProductContext.Provider value={value}>
+            {children}
+        </ProductContext.Provider>
+    )
 }
