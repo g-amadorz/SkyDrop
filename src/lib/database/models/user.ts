@@ -3,8 +3,9 @@ import mongoose, { Schema, Document, Model } from 'mongoose';
 export interface IUser extends Document {
   email: string;
   password: string;
-  name?: string;
-  points?: number;
+  name: string;
+  role: 'rider' | 'sender' | 'admin';
+  points: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -29,11 +30,19 @@ const UserSchema: Schema<IUser> = new Schema(
     },
     name: {
       type: String,
+      required: [true, 'Name is required'],
       trim: true,
     },
-    points : {
+    role: {
+      type: String,
+      enum: ['rider', 'sender', 'admin'],
+      required: [true, 'Role is required'],
+      default: 'sender',
+    },
+    points: {
       type: Number,
       default: 0,
+      min: [0, 'Points cannot be negative'],
     }
   },
   {
