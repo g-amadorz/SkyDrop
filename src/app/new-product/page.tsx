@@ -1,6 +1,7 @@
 "use client";
 import React, { useState } from "react";
 import { TextField, Button, Box } from "@mui/material";
+import { useProduct } from '../contexts/ProductContext';
 
 // Basic product creation form
 const Page = () => {
@@ -10,14 +11,15 @@ const Page = () => {
     price: "",
   });
 
+  const { create } = useProduct();
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
   const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    // TODO: handle product creation logic
-    console.log(form);
+    const fieldValues = Object.values(form);
+    create(fieldValues[0], fieldValues[1], fieldValues[2])
   };
 
   return (
@@ -41,7 +43,7 @@ const Page = () => {
         name="price"
         value={form.price}
         onChange={handleChange}
-        type="number"
+        type="number"       //Allow for 2 decimal places and require 2 decimal places
         required
       />
       <Button type="submit" variant="contained">
