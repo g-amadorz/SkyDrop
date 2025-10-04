@@ -8,11 +8,17 @@ export const ProductProvider = ({ children }) => {
     const [products, setProducts] = useState([]);   //Query from DB
     const [dataLoaded, setDataLoaded] = useState(false);
 
+    // Generate a unique id for each product
+    const generateId = () => {
+        if (products.length === 0) return 0;
+        return Math.max(...products.map(p => p.id ?? 0)) + 1;
+    };
+
     // Simple product object
     const create = (currApId, destApId, commuterPN) => {
         setProducts(prevProducts => {
             const newProduct = {
-                id: prevProducts.length,
+                id: prevProducts.length === 0 ? 0 : Math.max(...prevProducts.map(p => p.id ?? 0)) + 1,
                 currApId,
                 destApId,
                 commuterPN,
@@ -23,7 +29,7 @@ export const ProductProvider = ({ children }) => {
 
     // Product fetch object
     const get = (id) => {
-        return products[id];
+        return products.find(product => product.id === id);
     }
 
     //Local Storage load    TODO: Remove when replacing with API call, just here for testing 
