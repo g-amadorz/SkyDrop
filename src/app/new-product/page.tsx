@@ -1,6 +1,6 @@
 "use client";
 import React, { useState } from "react";
-import { TextField, Button, Box } from "@mui/material";
+import { TextField, Button, Box, InputAdornment } from "@mui/material";
 import { useProduct } from '../contexts/ProductContext';
 
 // Basic product creation form
@@ -14,7 +14,15 @@ const Page = () => {
   const { create } = useProduct();
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    if (name === "price") {
+      // Allow any input, but trim to two decimals if needed
+      const match = value.match(/^(\d*\.?\d{0,2})/);
+      setForm({ ...form, [name]: match ? match[1] : "" });
+    } 
+    else {
+      setForm({ ...form, [name]: value });
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -45,6 +53,9 @@ const Page = () => {
         onChange={handleChange}
         type="number"       //Allow for 2 decimal places and require 2 decimal places
         required
+        InputProps={{
+          startAdornment: <InputAdornment position="start">$</InputAdornment>,
+        }}
       />
       <Button type="submit" variant="contained">
         Create Product
