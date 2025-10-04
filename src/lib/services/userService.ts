@@ -33,10 +33,9 @@ export class UserService {
             throw new Error('Invalid email or password');
         }
 
-        // TODO: Compare hashed password
-        // const isPasswordValid = await bcrypt.compare(password, user.password);
+        const isPasswordValid = await bcrypt.compare(password, user.password);
 
-        if (user.password !== password) {
+        if (!isPasswordValid) {
             throw new Error('Invalid email or password');
         }
 
@@ -56,8 +55,7 @@ export class UserService {
     async updateUser(id: string, userData: updateAccountInput): Promise<IUser> {
         // If password is being updated, hash it
         if (userData.password) {
-            // TODO: Hash password
-            // userData.password = await bcrypt.hash(userData.password, 10);
+            userData.password = await bcrypt.hash(userData.password, 10);
         }
 
         const updatedUser = await this.repository.updateUser(id, userData);
