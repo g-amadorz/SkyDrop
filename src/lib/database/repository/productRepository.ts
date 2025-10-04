@@ -1,6 +1,6 @@
 import { createProductInput, updateProductInput } from "@/lib/schemas/productSchema";
-import Product from "@/lib/database/models/product";
-import { IProduct } from "@/lib/database/models/product";
+import Product from "@/lib/database/models/Product";
+import { IProduct } from "@/lib/database/models/Product";
 
 export class ProductRepository {
     constructor() {}
