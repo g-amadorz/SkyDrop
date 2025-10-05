@@ -28,6 +28,10 @@ export class CommuterService {
         return await this.repository.deleteCommuter(id);
     }
 
+    async assignDirection(commuterId: string, direction: string) {
+        return await this.repository.assignDirection(commuterId, direction);
+    }
+
     async findCommutersByActiveProducts() {
         return await this.repository.findCommutersByActiveProducts();
     }

@@ -45,6 +45,15 @@ export class CommuterRepository {
         ).populate('account').populate('activeProductIds');
     }
 
+
+    async assignDirection(commuterId: string, direction: string): Promise<ICommuter | null> {
+        return await Commuter.findByIdAndUpdate(
+            commuterId,
+            { direction },
+            { new: true, runValidators: true }
+        ).populate('account').populate('activeProductIds');
+    }
+
     async removeProductFromCommuter(commuterId: string, productId: string): Promise<ICommuter | null> {
         return await Commuter.findByIdAndUpdate(
             commuterId,

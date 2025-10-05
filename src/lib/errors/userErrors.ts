@@ -1,43 +1,47 @@
 /**
- * Base error class for all user-related errors
+ * User-specific errors
+ * Re-exports generic errors from AppError for backward compatibility
+ * and provides user-specific error classes
  */
-export abstract class UserError extends Error {
-    abstract statusCode: number;
-    abstract isOperational: boolean;
 
-    constructor(message: string) {
-        super(message);
-        Object.setPrototypeOf(this, new.target.prototype);
-        Error.captureStackTrace(this);
+import {
+    NotFoundError,
+    AlreadyExistsError,
+    ForbiddenError,
+    ValidationError,
+    DatabaseError as BaseDBError,
+    InsufficientResourceError,
+    ConflictError,
+} from './AppError';
+
+// ============================================
+// User-Specific Error Types
+// ============================================
+
+/**
+ * Thrown when a user is not found
+ */
+export class UserNotFoundError extends NotFoundError {
+    constructor(userId?: string) {
+        super('User', userId);
+        this.name = 'UserNotFoundError';
     }
 }
 
 /**
- * Client errors - Invalid input or business logic violations (4xx)
+ * Thrown when a user already exists
  */
-export class ClientError extends UserError {
-    statusCode = 400;
-    isOperational = true;
+export class UserAlreadyExistsError extends AlreadyExistsError {
+    constructor(email: string) {
+        super('User', 'email', email);
+        this.name = 'UserAlreadyExistsError';
+    }
 }
-
-/**
- * Server errors - System failures, database issues, etc. (5xx)
- */
-export class ServerError extends UserError {
-    statusCode = 500;
-    isOperational = true;
-}
-
-// ============================================
-// Client Error Types (Invalid Input)
-// ============================================
 
 /**
  * Thrown when attempting to toggle role for an admin user
  */
-export class AdminRoleToggleError extends ClientError {
-    statusCode = 403;
-
+export class AdminRoleToggleError extends ForbiddenError {
     constructor() {
         super('Cannot toggle role for admin users');
         this.name = 'AdminRoleToggleError';
@@ -47,9 +51,7 @@ export class AdminRoleToggleError extends ClientError {
 /**
  * Thrown when the new role is the same as the current role
  */
-export class RoleAlreadySetError extends ClientError {
-    statusCode = 400;
-
+export class RoleAlreadySetError extends ConflictError {
     constructor(role: string) {
         super(`User is already a ${role}`);
         this.name = 'RoleAlreadySetError';
@@ -59,9 +61,7 @@ export class RoleAlreadySetError extends ClientError {
 /**
  * Thrown when attempting to toggle to an invalid role
  */
-export class InvalidRoleError extends ClientError {
-    statusCode = 400;
-
+export class InvalidRoleError extends ValidationError {
     constructor() {
         super('Can only toggle between rider and sender roles');
         this.name = 'InvalidRoleError';
@@ -69,41 +69,31 @@ export class InvalidRoleError extends ClientError {
 }
 
 /**
- * Thrown when a user is not found
+ * Thrown when user has insufficient points
  */
-export class UserNotFoundError extends ClientError {
-    statusCode = 404;
-
-    constructor(userId?: string) {
-        super(userId ? `User with ID ${userId} not found` : 'User not found');
-        this.name = 'UserNotFoundError';
+export class InsufficientPointsError extends InsufficientResourceError {
+    constructor(required: number, available: number) {
+        super('points', required, available);
+        this.name = 'InsufficientPointsError';
     }
 }
 
-// ============================================
-// Server Error Types (System Failures)
-// ============================================
-
 /**
- * Thrown when the database fails to update the user role
+ * Thrown when invalid credentials are provided
  */
-export class RoleUpdateFailedError extends ServerError {
-    statusCode = 500;
-
+export class InvalidCredentialsError extends ValidationError {
     constructor() {
-        super('Failed to update user role due to a server error');
-        this.name = 'RoleUpdateFailedError';
+        super('Invalid email or password');
+        this.name = 'InvalidCredentialsError';
     }
 }
 
 /**
- * Thrown when there's a database connection or query error
+ * Thrown when the database fails to update the user
  */
-export class DatabaseError extends ServerError {
-    statusCode = 500;
-
-    constructor(message: string = 'Database operation failed') {
-        super(message);
-        this.name = 'DatabaseError';
+export class UserUpdateFailedError extends BaseDBError {
+    constructor(operation: string = 'update') {
+        super(operation, 'User update failed');
+        this.name = 'UserUpdateFailedError';
     }
 }

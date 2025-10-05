@@ -1,7 +1,17 @@
 import { createAccountInput, updateAccountInput } from '@/lib/schemas/accountSchema';
-import { IUser } from '@/lib/database/models/User';
+import { IUser } from '@/lib/database/models/user';
 import { UserRepository } from '@/lib/database/repository/userRepository';
 import bcrypt from 'bcrypt';
+import {
+    UserNotFoundError,
+    UserAlreadyExistsError,
+    InvalidCredentialsError,
+    InsufficientPointsError,
+    AdminRoleToggleError,
+    RoleAlreadySetError,
+    InvalidRoleError,
+    UserUpdateFailedError,
+} from '@/lib/errors';
 
 export class UserService {
     private repository: UserRepository;
@@ -13,7 +23,7 @@ export class UserService {
     async createUser(userData: createAccountInput): Promise<IUser> {
         const existingUser = await this.repository.findUserByEmail(userData.email);
         if (existingUser) {
-            throw new Error('User with this email already exists');
+            throw new UserAlreadyExistsError(userData.email);
         }
 
         const hashedPassword = await bcrypt.hash(userData.password, 10);
@@ -30,13 +40,13 @@ export class UserService {
         const user = await this.repository.findUserByEmail(email);
         
         if (!user) {
-            throw new Error('Invalid email or password');
+            throw new InvalidCredentialsError();
         }
 
         const isPasswordValid = await bcrypt.compare(password, user.password);
 
         if (!isPasswordValid) {
-            throw new Error('Invalid email or password');
+            throw new InvalidCredentialsError();
         }
 
         return user;
@@ -55,7 +65,7 @@ export class UserService {
         const updatedUser = await this.repository.updateUser(id, userData);
         
         if (!updatedUser) {
-            throw new Error('User not found');
+            throw new UserNotFoundError(id);
         }
 
         return updatedUser;
@@ -76,12 +86,12 @@ export class UserService {
     async addPointsToUser(userId: string, points: number): Promise<IUser> {
         const user = await this.findUserById(userId);
         if (!user) {
-            throw new Error('User not found');
+            throw new UserNotFoundError(userId);
         }
         const newPoints = user.points + points;
 
         if (newPoints < 0) {
-            throw new Error('Insufficient points');
+            throw new InsufficientPointsError(Math.abs(points), user.points);
         }
 
         const updatedUser = await this.repository.updateUser(userId, {
@@ -89,7 +99,7 @@ export class UserService {
         });
 
         if (!updatedUser) {
-            throw new Error('Failed to update user points');
+            throw new UserUpdateFailedError('points update');
         }
 
         return updatedUser;
@@ -98,22 +108,22 @@ export class UserService {
     async toggleUserRole(userId: string, newRole: 'rider' | 'sender'): Promise<IUser> {
         const user = await this.findUserById(userId);
         if (!user) {
-            throw new Error('User not found');
+            throw new UserNotFoundError(userId);
         }
 
         // Prevent toggling if user is an admin
         if (user.role === 'admin') {
-            throw new Error('Cannot toggle role for admin users');
+            throw new AdminRoleToggleError();
         }
 
         // Validate that the new role is different from current role
         if (user.role === newRole) {
-            throw new Error(`User is already a ${newRole}`);
+            throw new RoleAlreadySetError(newRole);
         }
 
         // Only allow toggling between 'rider' and 'sender'
         if (newRole !== 'rider' && newRole !== 'sender') {
-            throw new Error('Can only toggle between rider and sender roles');
+            throw new InvalidRoleError();
         }
 
         const updatedUser = await this.repository.updateUser(userId, {
@@ -121,7 +131,7 @@ export class UserService {
         });
 
         if (!updatedUser) {
-            throw new Error('Failed to update user role');
+            throw new UserUpdateFailedError('role update');
         }
 
         return updatedUser;
