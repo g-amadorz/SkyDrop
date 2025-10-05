@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Outfit } from "next/font/google";
+import { useRouter } from "next/navigation";
 
 const outfit = Outfit({
   subsets: ["latin"],
@@ -19,8 +20,26 @@ export default function Dashboard() {
   const [activeRole, setActiveRole] = useState("shipper");
   const [showRoleBar, setShowRoleBar] = useState(true);
   const [lastScrollY, setLastScrollY] = useState(0);
+  const router = useRouter();
 
   const currentRole = roles.find((r) => r.id === activeRole)!;
+
+  // Navigation handler for manage buttons
+  const handleManageClick = () => {
+    switch (activeRole) {
+      case "shipper":
+        router.push("/new-product");
+        break;
+      case "commuter":
+        router.push("/new-job");
+        break;
+      case "accesspoint":
+        router.push("/new-access-point");
+        break;
+      default:
+        break;
+    }
+  };
 
   // Hide/show on scroll
   useEffect(() => {
@@ -117,7 +136,8 @@ export default function Dashboard() {
                 : "Host deliveries at your location and become part of the SkyDrop network."}
             </p>
             <button
-              className={`px-6 py-3 rounded-full font-semibold text-white ${
+              onClick={handleManageClick}
+              className={`px-6 py-3 rounded-full font-semibold text-white transition-all transform hover:scale-105 ${
                 currentRole.color === "blue"
                   ? "bg-blue-500 hover:bg-blue-600"
                   : currentRole.color === "orange"
@@ -125,7 +145,11 @@ export default function Dashboard() {
                   : "bg-gray-900 hover:bg-black"
               }`}
             >
-              Manage
+              {activeRole === "shipper" 
+                ? "Create Shipment" 
+                : activeRole === "commuter" 
+                ? "Find Jobs" 
+                : "Manage Access Point"}
             </button>
           </motion.div>
         </AnimatePresence>

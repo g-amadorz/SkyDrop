@@ -10,7 +10,10 @@ import {
   Card,
   CardContent,
   CardActions,
+  IconButton,
 } from "@mui/material";
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { useAccesspoint } from "../contexts/AccesspointContext";
 import { stationCoords } from "../compute/CalcHops";
@@ -106,6 +109,7 @@ function haversine([lat1, lon1], [lat2, lon2]) {
 
 const NewAccessPointPage = ({ radius = DEFAULT_RADIUS }) => {
   const { accessPoints, create } = useAccesspoint();
+  const router = useRouter();
   const [pin, setPin] = useState(null); // [lat, lng]
   const [name, setName] = useState("");
   const [nameTouched, setNameTouched] = useState(false);
@@ -185,8 +189,43 @@ const NewAccessPointPage = ({ radius = DEFAULT_RADIUS }) => {
   };
   //TODO: access pint cards should spawn withing what is in view for the user on screen
   return (
-    <Box sx={{ height: "100vh", width: "100vw", position: 'relative', display: "flex", flexDirection: "column" }}>
-      <Typography variant="h5" sx={{ m: 2 }}>Create New Access Point</Typography>
+    <Box sx={{ display: "flex", flexDirection: "column", height: "100vh" }}>
+      {/* Header */}
+      <Box
+        sx={{
+          position: "sticky",
+          top: 0,
+          zIndex: 1100,
+          bgcolor: "white",
+          borderBottom: "1px solid #e0e0e0",
+          px: 2,
+          py: 1.5,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          boxShadow: "0 2px 4px rgba(0,0,0,0.1)"
+        }}
+      >
+        <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+          <IconButton
+            onClick={() => router.push("/dashboard")}
+            sx={{
+              bgcolor: "rgba(59, 130, 246, 0.1)",
+              color: "#3b82f6",
+              "&:hover": {
+                bgcolor: "rgba(59, 130, 246, 0.2)"
+              }
+            }}
+          >
+            <ArrowBackIcon />
+          </IconButton>
+          <Typography variant="h6" sx={{ fontWeight: 600, color: "#1f2937" }}>
+            Create New Access Point
+          </Typography>
+        </Box>
+      </Box>
+
+      {/* Main Content */}
       <Box sx={{ flex: 1, minHeight: 0, position: 'relative' }}>
         <MapContainer
           center={[49.25, -123.1]}

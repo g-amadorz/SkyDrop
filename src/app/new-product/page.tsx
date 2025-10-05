@@ -4,7 +4,9 @@ import { useUser } from "@clerk/nextjs";
 import { motion } from "framer-motion";
 import { Outfit } from "next/font/google";
 import Link from "next/link";
-import { TextField, Button, Box, Autocomplete, Alert, Typography } from "@mui/material";
+import { TextField, Button, Box, Autocomplete, Alert, Typography, IconButton } from "@mui/material";
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import { useRouter } from "next/navigation";
 import { useProduct } from '../contexts/ProductContext';
 import { useAccesspoint } from '../contexts/AccesspointContext';
 import { bfsShortestPath, skytrainGraph } from '../compute/CalcHops';
@@ -17,6 +19,7 @@ const outfit = Outfit({
 // Basic product creation form
 const Page = () => {
   const { user } = useUser();
+  const router = useRouter();
   const [form, setForm] = useState({
     currApId: "",
     destApId: "",
@@ -110,36 +113,47 @@ const Page = () => {
   const allOptions = [...accessPointOptions];
 
   return (
-    <div className={`${outfit.className} min-h-screen bg-white`}>
-      {/* --- Fixed Nav Bar --- */}
-      <motion.nav
-        initial={{ y: -50, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        transition={{ duration: 0.4 }}
-        className="fixed top-0 left-0 w-full bg-white/70 backdrop-blur-md shadow-sm border-b border-gray-200 z-50"
+    <Box sx={{ display: "flex", flexDirection: "column", height: "100vh" }}>
+      {/* Header */}
+      <Box
+        sx={{
+          position: "sticky",
+          top: 0,
+          zIndex: 1100,
+          bgcolor: "white",
+          borderBottom: "1px solid #e0e0e0",
+          px: 2,
+          py: 1.5,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          boxShadow: "0 2px 4px rgba(0,0,0,0.1)"
+        }}
       >
-        <div className="max-w-7xl mx-auto flex items-center justify-between px-6 py-4">
-          <Link href="/dashboard" className="flex items-baseline gap-1">
-            <h1 className="text-2xl font-extrabold text-blue-600">
-              Sky
-              <span className="text-gray-900 transform -rotate-2 inline-block ml-0.5">
-                Drop
-              </span>
-            </h1>
-          </Link>
-          <div className="flex items-center gap-4">
-            <Link
-              href="/dashboard/profile"
-              className="text-gray-700 hover:text-blue-600 font-medium transition"
-            >
-              Profile
-            </Link>
-          </div>
-        </div>
-      </motion.nav>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+          <IconButton
+            onClick={() => router.push("/dashboard")}
+            sx={{
+              bgcolor: "rgba(59, 130, 246, 0.1)",
+              color: "#3b82f6",
+              "&:hover": {
+                bgcolor: "rgba(59, 130, 246, 0.2)"
+              }
+            }}
+          >
+            <ArrowBackIcon />
+          </IconButton>
+          <Typography variant="h6" sx={{ fontWeight: 600, color: "#1f2937" }}>
+            Create Shipment
+          </Typography>
+        </Box>
+      </Box>
 
-      {/* --- Main Content --- */}
-      <main className="pt-24 px-6">
+      {/* Main Content */}
+      <Box sx={{ flex: 1, overflowY: "auto" }}>
+        <div className={`${outfit.className} min-h-full bg-white`}>
+          {/* --- Main Content --- */}
+          <main className="pt-6 px-6">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -235,9 +249,11 @@ const Page = () => {
               </div>
             </motion.div>
           )}
-        </motion.div>
-      </main>
-    </div>
+          </motion.div>
+          </main>
+        </div>
+      </Box>
+    </Box>
   );
 };
 
