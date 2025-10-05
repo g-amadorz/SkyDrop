@@ -229,12 +229,11 @@ const NewJob = () => {
                 const [lat, lng] = stationCoords[station];
                 let icon = undefined;
                   if (idx === openPath.length - 1) {
-                    // Use the correct aspect ratio for your red pin image (e.g., 41x25 or 82x50)
-                    icon = L.icon({
-                      iconUrl: '/red-pin.png',
-                      iconSize: [25, 41], // width, height (adjust if using 82x50)
-                      iconAnchor: [20, 25] // center bottom
-                    });
+                      icon = L.icon({
+                        iconUrl: '/red-pin.png',
+                        iconSize: [25, 41], // width, height
+                        iconAnchor: [12.5, 41] // bottom center
+                      });
                   } else {
                     icon = L.divIcon({ className: '', html: '<div style="width:12px;height:12px;background:#888;border-radius:50%;border:2px solid #fff;"></div>' });
                   }
