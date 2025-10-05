@@ -18,7 +18,7 @@ export interface IDelivery extends Document {
   originAccessPoint: mongoose.Types.ObjectId;
   destinationAccessPoint: mongoose.Types.ObjectId;
   currentAccessPoint: mongoose.Types.ObjectId;
-  status: 'awaiting-pickup' | 'in-transit' | 'ready-for-recipient' |;
+  status: 'awaiting-pickup' | 'in-transit' | 'ready-for-recipient';
   legs: IDeliveryLeg[];
   totalCost: number;
   paidAmount: number;
