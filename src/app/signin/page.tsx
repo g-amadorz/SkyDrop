@@ -6,6 +6,7 @@ import { motion } from "framer-motion";
 import { Outfit } from "next/font/google";
 import Link from "next/link";
 
+
 const outfit = Outfit({
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],

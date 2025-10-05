@@ -1,14 +1,15 @@
 "use client";
 import { useState, useEffect } from "react";
 import { Outfit } from "next/font/google";
-import { ClerkProvider, SignedIn, SignedOut, SignInButton, UserButton } from "@clerk/nextjs";
+
 import "./globals.css";
 
-import { ProductProvider } from "./contexts/ProductProvider";
-import { CommuterProvider } from "./contexts/CommuterProvider";
-import { ShipperProvider } from "./contexts/ShipperProvider";
+// import { ProductProvider } from "./contexts/ProductProvider";
+// import { CommuterProvider } from "./contexts/CommuterProvider";
+// import { ShipperProvider } from "./contexts/ShipperProvider";
 import { AnimatePresence, motion } from "framer-motion";
 import Link from "next/link";
+// import { ClerkProvider, SignedIn, SignedOut, SignInButton, UserButton } from "@clerk/nextjs";
 
 const outfit = Outfit({
   subsets: ["latin"],
@@ -80,36 +81,7 @@ export default function MainPage() {
 
   return (
 
-    <><main className="min-h-screen grid place-items-center p-8">
-      <div className="flex flex-col items-center gap-4">
-        <h1 className="text-2xl font-bold">Welcome to Skydrop</h1>
-
-        {/* When signed out -> show Sign In */}
-        <SignedOut>
-          {/* Opens Clerk modal; or use href="/sign-in" if you prefer a page */}
-          <SignInButton mode="modal">
-            <button className="px-4 py-2 rounded bg-black text-white">Sign in</button>
-          </SignInButton>
-          <a
-            href="/sign-up"
-            className="text-sm underline opacity-80 hover:opacity-100"
-          >
-            Or create an account
-          </a>
-        </SignedOut>
-
-        {/* When signed in -> show UserButton + link to dashboard */}
-        <SignedIn>
-          <UserButton afterSignOutUrl="/" />
-          <a
-            href="/dashboard"
-            className="px-4 py-2 rounded bg-white text-black border mt-2"
-          >
-            Go to dashboard
-          </a>
-        </SignedIn>
-      </div>
-    </main><div
+      <div
       className={`${outfit.className} min-h-screen flex flex-col items-center justify-center bg-gradient-to-b from-blue-50 to-white px-6 py-10`}
     >
         {/* --- SkyDrop Logo --- */}
@@ -191,6 +163,6 @@ export default function MainPage() {
         <footer className="text-center text-gray-400 text-xs mt-16">
           © 2025 SkyDrop Team
         </footer>
-      </div></>
+      </div>
   );
 }
