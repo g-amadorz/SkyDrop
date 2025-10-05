@@ -4,78 +4,55 @@ import { useState, useEffect } from 'react';
 import { CommuterContext } from "./CommuterContext";
 
 export const CommuterProvider = ({ children }) => {
-    const [commuters, setCommuters] = useState([]);   //Query from DB
+    const [commuters, setCommuters] = useState([]);
     const [dataLoaded, setDataLoaded] = useState(false);
 
-    class Commuter {
-        id;             //Num from DB
-        productId;      //Foreign key from DB
-        firstName;
-        lastName;
-    }
+    // Fetch all commuters from API
+    useEffect(() => {
+        if (!dataLoaded) {
+            fetch('/api/commuters')
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) setCommuters(data.data);
+                    setDataLoaded(true);
+                })
+                .catch(() => setDataLoaded(true));
+        }
+    }, [dataLoaded]);
 
-        // Generate a unique id for each commuter
-        const generateId = () => {
-            if (commuters.length === 0) return 0;
-            return Math.max(...commuters.map(c => c.id ?? 0)) + 1;
-        };
-
-        // Create commuter
-        const create = (productId, firstName, lastName) => {
-            setCommuters(prevCommuters => {
-                const newCommuter = {
-                    id: prevCommuters.length === 0 ? 0 : Math.max(...prevCommuters.map(c => c.id ?? 0)) + 1,
-                    productId,
-                    firstName,
-                    lastName,
-                };
-                return [...prevCommuters, newCommuter];
+    // Create commuter via API
+    const create = async (commuterData) => {
+        try {
+            const res = await fetch('/api/commuters', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(commuterData)
             });
-        };
-
-        // Get commuter by id
-        const get = (id) => {
-            return commuters.find(commuter => commuter.id === id);
-        };
-
-        // Load commuters from localStorage on mount
-        useEffect(() => {
-            if (!dataLoaded) {
-                const stored = localStorage.getItem('commuters');
-                if (stored) {
-                    try {
-                        const parsed = JSON.parse(stored);
-                        if (Array.isArray(parsed)) {
-                            setCommuters(parsed);
-                        } else {
-                            setCommuters([]);
-                        }
-                    } catch (error) {
-                        setCommuters([]);
-                    }
-                } else {
-                    setCommuters([]);
-                }
-                setDataLoaded(true);
+            const data = await res.json();
+            if (data.success) {
+                setCommuters(prev => [...prev, data.data]);
+                return data.data;
+            } else {
+                throw new Error(data.error || 'Failed to create commuter');
             }
-        }, [dataLoaded]);
+        } catch (error) {
+            console.error('Error creating commuter:', error);
+            throw error;
+        }
+    };
 
-        // Save to localStorage when commuters changes (but only after initial load)
-        useEffect(() => {
-            if (dataLoaded) {
-                localStorage.setItem('commuters', JSON.stringify(commuters));
-            }
-        }, [commuters, dataLoaded]);
+    // Get commuter by id from local state
+    const get = (id) => commuters.find(commuter => commuter.id === id);
 
     const value = {
         commuters,
-            create,
-            get,
-    }
+        create,
+        get,
+    };
 
     return (
         <CommuterContext.Provider value={value}>
             {children}
         </CommuterContext.Provider>
-    )
+    );
 }

@@ -2,7 +2,6 @@
 import React, { useState } from "react";
 import { TextField, Button, Box, Autocomplete } from "@mui/material";
 import { useProduct } from '../contexts/ProductContext';
-import { useAccesspoint } from '../contexts/AccesspointContext';
 import { bfsShortestPath, skytrainGraph } from '../compute/CalcHops';
 
 // Basic product creation form
@@ -12,7 +11,7 @@ const Page = () => {
     destApId: "",
   });
 
-  const { create } = useProduct();
+  const { create, accessPoints } = useProduct();
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -64,9 +63,7 @@ const Page = () => {
   //Commuter page should also be showing before commuter accepts a job
 
 
-  // Get access points and stations, access points first
-  const { accessPoints } = useAccesspoint();
-  // Map access points to option objects
+  // Get access points and stations, access points first (from ProductProvider)
   const accessPointOptions = accessPoints.map((ap: any) => ({
     label: `${ap.name} (Access Point) [${ap.lat?.toFixed?.(4) ?? ''}, ${ap.lng?.toFixed?.(4) ?? ''}]`,
     value: ap.name,

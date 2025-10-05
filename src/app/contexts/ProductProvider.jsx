@@ -1,79 +1,92 @@
 //Store, create, and edit products with live data
 //Needs to be a context as many users should be able to access limited information
 "use client"
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useContext } from 'react';
 import { ProductContext } from './ProductContext';
+import { AccesspointContext } from './AccesspointContext';
 
 export const ProductProvider = ({ children }) => {
-    const [products, setProducts] = useState([]);   //Query from DB
+    const [products, setProducts] = useState([]);
     const [dataLoaded, setDataLoaded] = useState(false);
+    const { accessPoints } = useContext(AccesspointContext);
 
-    // Generate a unique id for each product
-    const generateId = () => {
-        if (products.length === 0) return 0;
-        return Math.max(...products.map(p => p.id ?? 0)) + 1;
-    };
-
-    // Simple product object
-    const create = (currApId, destApId, price) => {
-        setProducts(prevProducts => {
-            const newProduct = {
-                id: prevProducts.length === 0 ? 0 : Math.max(...prevProducts.map(p => p.id ?? 0)) + 1,
-                currApId,
-                destApId,
-                price,
-            };
-            return [...prevProducts, newProduct];
-        });
-    }
-
-    // Product fetch object
-    const get = (id) => {
-        return products.find(product => product.id === id);
-    }
-
-    //Local Storage load    TODO: Remove when replacing with API call, just here for testing 
+    // Fetch all products from API
     useEffect(() => {
         if (!dataLoaded) {
-            const stored = localStorage.getItem('products');
-            if (stored) {
-                try {
-                    const parsed = JSON.parse(stored);
-                    if (Array.isArray(parsed)) {
-                        setProducts(parsed);
-                    } else {
-                        setProducts([]);
-                    }
-                } catch (error) {
-                    setProducts([]);
-                }
-            } else {
-                setProducts([]);
-            }
-            setDataLoaded(true);
+            fetch('/api/products')
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) setProducts(data.data);
+                    setDataLoaded(true);
+                })
+                .catch(() => setDataLoaded(true));
         }
     }, [dataLoaded]);
 
-    // Save to localStorage when products changes (but only after initial load)
-    useEffect(() => {
-        if (dataLoaded) {
-            localStorage.setItem('products', JSON.stringify(products));
+    // Create product via API
+    const create = async (currApId, destApId, price) => {
+        try {
+            const res = await fetch('/api/products', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    currApId,
+                    destApId,
+                    price,
+                })
+            });
+            const data = await res.json();
+            if (data.success) {
+                setProducts(prev => [...prev, data.data]);
+                return data.data;
+            } else {
+                throw new Error(data.error || 'Failed to create product');
+            }
+        } catch (error) {
+            console.error('Error creating product:', error);
+            throw error;
         }
-    }, [products, dataLoaded]);
-
-
-    // Associate a commuter phone number with a product by id
-    const setCommuter = (productId, phoneNumber) => {
-        setProducts(prevProducts => prevProducts.map(p =>
-            p.id === productId ? { ...p, commuterPN: phoneNumber } : p
-        ));
     };
 
-    // Update the location (currApId, destApId) for a product by id
-    const setLocation = (productId, currApId, destApId) => {
-        setProducts(prevProducts => prevProducts.map(p =>
-            p.id === productId ? { ...p, currApId, destApId } : p
-        ));
+    // Get product by id from local state
+    const get = (id) => products.find(product => product.id === id);
+
+    // Update commuter phone number for a product by id (API PATCH)
+    const setCommuter = async (productId, phoneNumber) => {
+        try {
+            const res = await fetch(`/api/products/${productId}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ commuterPN: phoneNumber })
+            });
+            const data = await res.json();
+            if (data.success) {
+                setProducts(prev => prev.map(p => p.id === productId ? { ...p, commuterPN: phoneNumber } : p));
+            } else {
+                throw new Error(data.error || 'Failed to update product commuter');
+            }
+        } catch (error) {
+            console.error('Error updating commuter:', error);
+        }
+    };
+
+    // Update the location (currApId, destApId) for a product by id (API PATCH)
+    const setLocation = async (productId, currApId, destApId) => {
+        try {
+            const res = await fetch(`/api/products/${productId}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ currApId, destApId })
+            });
+            const data = await res.json();
+            if (data.success) {
+                setProducts(prev => prev.map(p => p.id === productId ? { ...p, currApId, destApId } : p));
+            } else {
+                throw new Error(data.error || 'Failed to update product location');
+            }
+        } catch (error) {
+            console.error('Error updating location:', error);
+        }
     };
 
     const value = {
@@ -82,11 +95,12 @@ export const ProductProvider = ({ children }) => {
         get,
         setCommuter,
         setLocation,
-    }
+        accessPoints,
+    };
 
     return (
         <ProductContext.Provider value={value}>
             {children}
         </ProductContext.Provider>
-    )
+    );
 }
