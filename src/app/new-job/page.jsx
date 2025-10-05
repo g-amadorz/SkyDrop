@@ -33,6 +33,7 @@ const Popup = dynamic(() => import("react-leaflet").then(mod => mod.Popup), { ss
 const Polyline = dynamic(() => import("react-leaflet").then(mod => mod.Polyline), { ssr: false });
 
 import { stationCoords, bfsShortestPath, skytrainGraph } from "../compute/CalcHops";
+import { useAccesspoint } from "../contexts/AccesspointContext";
 
 const NewJob = () => {
   useEffect(() => {
@@ -65,8 +66,29 @@ const NewJob = () => {
     return () => window.removeEventListener('resize', check);
   }, []);
 
+
   // Only show products with no commuterPN
   const availableProducts = products.filter(p => !p.commuterPN);
+
+  // Access points context
+  const { accessPoints } = useAccesspoint ? useAccesspoint() : { accessPoints: [] };
+
+  // Helper: if currApId is an access point, use its nearestStation
+  const resolveToStation = (name) => {
+    const ap = accessPoints.find(ap => ap.name === name);
+    if (ap && ap.nearestStation) return ap.nearestStation;
+    return name;
+  };
+
+  // Helper: get marker position for a job origin (station or access point)
+  const getOriginLatLng = (name) => {
+    const ap = accessPoints.find(ap => ap.name === name);
+    if (ap && ap.lat && ap.lng) return [ap.lat, ap.lng];
+    if (stationCoords[name]) return stationCoords[name];
+    // fallback: use nearestStation if available
+    if (ap && ap.nearestStation && stationCoords[ap.nearestStation]) return stationCoords[ap.nearestStation];
+    return null;
+  };
 
   // Basic phone validation (10 digits)
   const isValidPhone = /^\d{10}$/.test(phone);
@@ -82,25 +104,39 @@ const NewJob = () => {
   // Track which job popup is open
   const [openJobId, setOpenJobId] = useState(null);
 
-  // Only show pickup (origin) markers for currApId
+  // Get the path for the open job (if any)
+  const openJob = openJobId ? availableProducts.find(j => j.id === openJobId) : null;
+  // Use selected drop-off for open job if set
+  let openPath = [];
+  if (openJob) {
+    const { path } = bfsShortestPath(skytrainGraph, openJob.currApId, openJob.destApId);
+    const selectedDrop = dropOffSelections[openJob.id] || path[path.length - 1];
+    const dropIdx = path.indexOf(selectedDrop);
+    openPath = dropIdx > 0 ? path.slice(0, dropIdx + 1) : path;
+  }
+
+  // Only show pickup (origin) markers for currApId, unless a path is being shown
   const markers = useMemo(() => {
-    const pickupStations = Array.from(new Set(availableProducts.map(p => p.currApId)));
-    // If a path is being shown, get its end station
-    let pathEndStation = null;
-    if (openJobId) {
-      const openJob = availableProducts.find(j => j.id === openJobId);
-      if (openJob) {
-        const { path } = bfsShortestPath(skytrainGraph, openJob.currApId, openJob.destApId);
-        if (path && path.length > 1) pathEndStation = path[path.length - 1];
-      }
+    // If a path is being shown, only show start and end pins
+    if (openPath.length > 1) {
+      // For path display, show start and end pins (station or access point)
+      const startLatLng = getOriginLatLng(openPath[0]);
+      const endLatLng = getOriginLatLng(openPath[openPath.length - 1]);
+      return [startLatLng, endLatLng].map((pos, idx) => {
+        if (!pos) return null;
+        return (
+          <Marker key={String(pos) + idx} position={pos} />
+        );
+      });
     }
+    // Otherwise, show all pickup markers as before
+    const pickupStations = Array.from(new Set(availableProducts.map(p => p.currApId)));
     return pickupStations.map(name => {
-      // Suppress blue marker if this is the end of the shown path
-      if (name === pathEndStation) return null;
-      const [lat, lng] = stationCoords[name];
+      const pos = getOriginLatLng(name);
+      if (!pos) return null;
       const relatedJobs = availableProducts.filter(p => p.currApId === name);
       return (
-        <Marker key={name} position={[lat, lng]}>
+        <Marker key={name} position={pos}>
           <Popup
             onOpen={() => setOpenJobId(null)}
           >
@@ -108,7 +144,7 @@ const NewJob = () => {
             <Box sx={{ maxHeight: 300, overflowY: 'auto', width: 250 }}>
               {relatedJobs.map(job => {
                 // Get path for this job
-                const { path } = bfsShortestPath(skytrainGraph, job.currApId, job.destApId);
+                const { path } = bfsShortestPath(skytrainGraph, resolveToStation(job.currApId), resolveToStation(job.destApId));
                 // Default drop-off is the last station
                 const selectedDrop = dropOffSelections[job.id] || path[path.length - 1];
                 return (
@@ -131,7 +167,7 @@ const NewJob = () => {
                         </Select>
                       </Box>
                       <Typography variant="body2" sx={{ m: 0 }} style={{margin: "8px 0 0 0"}}>
-                        Hops: {bfsShortestPath(skytrainGraph, job.currApId, selectedDrop).hops}
+                        Hops: {bfsShortestPath(skytrainGraph, resolveToStation(job.currApId), selectedDrop).hops}
                       </Typography>
                     </CardContent>
                     <CardActions>
@@ -170,18 +206,7 @@ const NewJob = () => {
         </Marker>
       );
     });
-  }, [availableProducts, selectedProduct, phone, openJobId]);
-
-  // Get the path for the open job (if any)
-  const openJob = openJobId ? availableProducts.find(j => j.id === openJobId) : null;
-  // Use selected drop-off for open job if set
-  let openPath = [];
-  if (openJob) {
-    const { path } = bfsShortestPath(skytrainGraph, openJob.currApId, openJob.destApId);
-    const selectedDrop = dropOffSelections[openJob.id] || path[path.length - 1];
-    const dropIdx = path.indexOf(selectedDrop);
-    openPath = dropIdx > 0 ? path.slice(0, dropIdx + 1) : path;
-  }
+  }, [availableProducts, selectedProduct, phone, openJobId, openPath]);
 
   // Job list component for desktop
   const JobList = (
@@ -205,28 +230,35 @@ const NewJob = () => {
             <ListItemText primary="No jobs available" />
           </ListItem>
         ) : (
-          availableProducts.map((product) => (
-            <ListItem key={product.id} divider alignItems="flex-start">
-              <Box sx={{ width: '100%', display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Box>
-                  <Typography variant="body1">
-                    From: {product.currApId} → {product.destApId}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Hops: {bfsShortestPath(skytrainGraph, product.currApId, product.destApId).hops}
-                  </Typography>
+          availableProducts.map((product) => {
+            const hops = bfsShortestPath(
+              skytrainGraph,
+              resolveToStation(product.currApId),
+              resolveToStation(product.destApId)
+            ).hops;
+            return (
+              <ListItem key={product.id} divider alignItems="flex-start">
+                <Box sx={{ width: '100%', display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Box>
+                    <Typography variant="body1">
+                      From: {product.currApId} → {product.destApId}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Hops: {hops}
+                    </Typography>
+                  </Box>
+                  <Button
+                    size="small"
+                    variant="contained"
+                    onClick={() => handleClaim(product.id)}
+                    disabled={selectedProduct === product.id || !isValidPhone}
+                  >
+                    {selectedProduct === product.id ? "Claimed" : "Claim"}
+                  </Button>
                 </Box>
-                <Button
-                  size="small"
-                  variant="contained"
-                  onClick={() => handleClaim(product.id)}
-                  disabled={selectedProduct === product.id || !isValidPhone}
-                >
-                  {selectedProduct === product.id ? "Claimed" : "Claim"}
-                </Button>
-              </Box>
-            </ListItem>
-          ))
+              </ListItem>
+            );
+          })
         )}
       </List>
     </Box>

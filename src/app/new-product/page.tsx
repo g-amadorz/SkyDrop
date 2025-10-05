@@ -2,6 +2,7 @@
 import React, { useState } from "react";
 import { TextField, Button, Box, Autocomplete } from "@mui/material";
 import { useProduct } from '../contexts/ProductContext';
+import { useAccesspoint } from '../contexts/AccesspointContext';
 import { bfsShortestPath, skytrainGraph } from '../compute/CalcHops';
 
 // Basic product creation form
@@ -19,10 +20,21 @@ const Page = () => {
   };
 
 
+  // Helper to resolve to station if access point
+  const resolveToStation = (optionValue: string) => {
+    // Try to find in accessPoints
+    const ap = accessPoints.find((ap: any) => ap.name === optionValue);
+    if (ap && ap.nearestStation) return ap.nearestStation;
+    // Otherwise, assume it's a station name
+    return optionValue;
+  };
+
   // Calculate hops (price) using BFS
   const calculateCost = () => {
-    if (!form.currApId || !form.destApId) return 0;
-    return bfsShortestPath(skytrainGraph, form.currApId, form.destApId);
+    if (!form.currApId || !form.destApId) return { hops: 0, path: [] };
+    const origin = resolveToStation(form.currApId);
+    const dest = resolveToStation(form.destApId);
+    return bfsShortestPath(skytrainGraph, origin, dest);
   };
 
   const [showApproval, setShowApproval] = useState(false);
@@ -31,14 +43,14 @@ const Page = () => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     // Calculate cost and show approval dialog
-    const { hops, path } = calculateCost();
+    const { hops } = calculateCost();
     setCalculatedCost(hops);
     setShowApproval(true);
   };
 
   const handleApprove = () => {
     // currApId = origin, destApId = destination, price = hops
-    const hops = calculateCost();
+    const { hops } = calculateCost();
     create(form.currApId, form.destApId, hops);
     setShowApproval(false);
   };
@@ -51,26 +63,47 @@ const Page = () => {
   //Todo:
   //Commuter page should also be showing before commuter accepts a job
 
-  // Get all unique station names from the graph
-  const stationNames = Object.keys(skytrainGraph).sort();
+
+  // Get access points and stations, access points first
+  const { accessPoints } = useAccesspoint();
+  // Map access points to option objects
+  const accessPointOptions = accessPoints.map((ap: any) => ({
+    label: `${ap.name} (Access Point) [${ap.lat?.toFixed?.(4) ?? ''}, ${ap.lng?.toFixed?.(4) ?? ''}]`,
+    value: ap.name,
+    type: 'accessPoint',
+    id: ap.id,
+    lat: ap.lat,
+    lng: ap.lng,
+  }));
+  // Map stations to option objects
+  const stationOptions = Object.keys(skytrainGraph).sort().map(station => ({
+    label: station + ' (Station)',
+    value: station,
+    type: 'station',
+    id: station,
+  }));
+  // Combine, access points first
+  const allOptions = [...accessPointOptions, ...stationOptions];
 
   return (
     <>
       <Box component="form" onSubmit={handleSubmit} sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
         <Autocomplete
-          options={stationNames}
-          value={form.currApId}
-          onChange={(_, newValue) => setForm(f => ({ ...f, currApId: newValue || "" }))}
+          options={allOptions}
+          getOptionLabel={option => option.label}
+          value={allOptions.find(opt => opt.value === form.currApId) || null}
+          onChange={(_, newValue) => setForm(f => ({ ...f, currApId: newValue ? newValue.value : "" }))}
           renderInput={(params) => (
-            <TextField {...params} label="Origin Station (currApId)" required />
+            <TextField {...params} label="Origin (Access Point or Station)" required />
           )}
         />
         <Autocomplete
-          options={stationNames}
-          value={form.destApId}
-          onChange={(_, newValue) => setForm(f => ({ ...f, destApId: newValue || "" }))}
+          options={allOptions}
+          getOptionLabel={option => option.label}
+          value={allOptions.find(opt => opt.value === form.destApId) || null}
+          onChange={(_, newValue) => setForm(f => ({ ...f, destApId: newValue ? newValue.value : "" }))}
           renderInput={(params) => (
-            <TextField {...params} label="Destination Station (destApId)" required />
+            <TextField {...params} label="Destination (Access Point or Station)" required />
           )}
         />
         <Button type="submit" variant="contained">

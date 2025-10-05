@@ -61,7 +61,7 @@ function PinOverlayCard({
           <Typography variant="subtitle1" fontWeight={600} gutterBottom>New Access Point</Typography>
           <Typography variant="caption">Lat: {pin[0].toFixed(5)}, Lng: {pin[1].toFixed(5)}</Typography><br />
           <Typography variant="caption">
-            Nearest: {nearest?.name} ({nearest?.dist?.toFixed(0)}m)
+            Nearest Station: <b>{nearest?.name}</b> ({nearest?.dist?.toFixed(0)}m)
           </Typography>
           <TextField
             label="Name"
@@ -163,7 +163,15 @@ const NewAccessPointPage = ({ radius = DEFAULT_RADIUS }) => {
       return;
     }
     try {
-      await create({ name, coords: pin });
+      // Save lat/lng as separate fields
+      await create({
+        name,
+        lat: pin[0],
+        lng: pin[1],
+        nearestStation: nearest?.name || "",
+        nearestStationDist: nearest?.dist || 0,
+        numProducts: 0
+      });
       setSnack(true);
       setPin(null);
       setName("");
@@ -173,7 +181,7 @@ const NewAccessPointPage = ({ radius = DEFAULT_RADIUS }) => {
       setError("Failed to create access point.");
     }
   };
-
+  //TODO: access pint cards should spawn withing what is in view for the user on screen
   return (
     <Box sx={{ height: "100vh", width: "100vw", position: 'relative', display: "flex", flexDirection: "column" }}>
       <Typography variant="h5" sx={{ m: 2 }}>Create New Access Point</Typography>
