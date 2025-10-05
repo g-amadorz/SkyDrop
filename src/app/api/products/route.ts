@@ -1,13 +1,10 @@
 // src/app/api/products/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { v4 as uuidv4 } from "uuid";
-
 import { ProductService } from "@/lib/services/productService";
 import { createProductSchema } from "@/lib/schemas/productSchema";
 import Shipper from "@/lib/database/models/Shipper";
-import { connectMongo } from "@/lib/services/mongodb";
-import { applyPoints } from "@/lib/database/repository/pointsRepository";
+import { connectMongo } from "@/lib/database/mongoose";
 
 export const runtime = "nodejs"; // Clerk + Mongoose require Node runtime
 
@@ -25,9 +22,7 @@ export async function GET() {
     const shipper = await Shipper.findOne({ clerkUserId: userId }).select("_id");
     if (!shipper) return NextResponse.json({ success: true, data: [] });
 
-    const products = await productService.getAllProducts({
-      shipperId: shipper._id.toString(),
-    });
+    const products = await productService.getAllProducts();
     return NextResponse.json({ success: true, data: products });
   } catch (error) {
     console.error(error);
@@ -49,7 +44,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const validated = createProductSchema.parse(body);
 
-    const { originAccessPointId, destinationAccessPointId, weightLb } = validated;
+    const { originAccessPointId, destinationAccessPointId } = validated;
     if (weightLb > 5) {
       return NextResponse.json(
         { success: false, error: "Max weight is 5 lb" },
