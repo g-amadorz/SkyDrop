@@ -14,10 +14,22 @@ const outfit = Outfit({
   weight: ["400", "500", "600", "700"],
 });
 
-const MapContainer = dynamic(() => import("react-leaflet").then((mod) => mod.MapContainer), { ssr: false });
-const TileLayer = dynamic(() => import("react-leaflet").then((mod) => mod.TileLayer), { ssr: false });
-const Marker = dynamic(() => import("react-leaflet").then((mod) => mod.Marker), { ssr: false });
-const Circle = dynamic(() => import("react-leaflet").then((mod) => mod.Circle), { ssr: false });
+const MapContainer = dynamic(
+  () => import("react-leaflet").then((mod) => mod.MapContainer),
+  { ssr: false }
+);
+const TileLayer = dynamic(
+  () => import("react-leaflet").then((mod) => mod.TileLayer),
+  { ssr: false }
+);
+const Marker = dynamic(
+  () => import("react-leaflet").then((mod) => mod.Marker),
+  { ssr: false }
+);
+const Circle = dynamic(
+  () => import("react-leaflet").then((mod) => mod.Circle),
+  { ssr: false }
+);
 
 const DEFAULT_RADIUS = 500;
 
@@ -111,25 +123,29 @@ export default function AccessPointSection() {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4 }}
-      className={`${outfit.className} flex flex-col items-center text-center px-6 pt-10 pb-16 bg-white w-full`}
+      className={`${outfit.className} flex flex-col items-center text-center px-6 pt-10 pb-16 bg-white w-full relative z-0`}
     >
       {/* --- Title & Slogan --- */}
       <h1 className="text-4xl font-extrabold text-gray-900 leading-tight mb-2">
         Become an <span className="text-orange-500">Access Point</span>
       </h1>
       <p className="text-gray-600 mb-10 max-w-md">
-        Be the bridge between <span className="text-gray-800 font-medium">senders</span> and{" "}
+        Be the bridge between{" "}
+        <span className="text-gray-800 font-medium">senders</span> and{" "}
         <span className="text-gray-800 font-medium">commuters</span> — <br />
         host deliveries and help SkyDrop connect every corner.
       </p>
 
       {/* --- Map --- */}
-      <div className="w-full max-w-3xl h-[400px] mb-8 rounded-2xl overflow-hidden shadow-md border border-gray-100">
+      <div
+        className="w-full max-w-3xl h-[400px] mb-8 rounded-2xl overflow-hidden shadow-md border border-gray-100 relative z-0"
+        style={{ zIndex: 0 }}
+      >
         {mounted && (
           <MapContainer
             center={[49.25, -123.1]}
             zoom={12}
-            style={{ height: "100%", width: "100%" }}
+            style={{ height: "100%", width: "100%", zIndex: 0 }}
           >
             <TileLayer
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -150,7 +166,7 @@ export default function AccessPointSection() {
       </div>
 
       {/* --- Input Card --- */}
-      <div className="w-full max-w-md bg-gray-50 border border-gray-200 rounded-2xl p-6 shadow-sm mb-8">
+      <div className="w-full max-w-md bg-gray-50 border border-gray-200 rounded-2xl p-6 shadow-sm mb-8 relative z-10">
         <h3 className="text-xl font-semibold text-gray-800 mb-3">📍 New Access Point</h3>
 
         {pin ? (
