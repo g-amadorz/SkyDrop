@@ -48,7 +48,7 @@ export const recipientPickupSchema = z.object({
 
 // Schema for updating delivery status
 export const updateDeliveryStatusSchema = z.object({
-  status: z.enum(['awaiting-pickup', 'in-transit', 'at-intermediate', 'ready-for-recipient', 'completed', 'cancelled']),
+  status: z.enum(['awaiting-pickup', 'in-transit', 'ready-for-recipient', 'completed']),
   currentAccessPoint: z.string().optional(),
   currentCommuterId: z.string().optional(),
 });
@@ -61,15 +61,7 @@ export const getAvailablePackagesSchema = z.object({
   destinationDirection: z.enum(['VCC-CLARK', 'LAFARGE']).optional(),
 });
 
-// Schema for tracking delivery
-export const trackDeliverySchema = z.object({
-  trackingNumber: z.string().optional(),
-  deliveryId: z.string().optional(),
-}).refine(data => data.trackingNumber || data.deliveryId, {
-  message: "Either trackingNumber or deliveryId must be provided",
-});
 
-// Type exports
 export type DeliveryLegInput = z.infer<typeof deliveryLegSchema>;
 export type InitiateDeliveryInput = z.infer<typeof initiateDeliverySchema>;
 export type ClaimPackageInput = z.infer<typeof claimPackageSchema>;
@@ -77,4 +69,3 @@ export type DropoffPackageInput = z.infer<typeof dropoffPackageSchema>;
 export type RecipientPickupInput = z.infer<typeof recipientPickupSchema>;
 export type UpdateDeliveryStatusInput = z.infer<typeof updateDeliveryStatusSchema>;
 export type GetAvailablePackagesInput = z.infer<typeof getAvailablePackagesSchema>;
-export type TrackDeliveryInput = z.infer<typeof trackDeliverySchema>;
