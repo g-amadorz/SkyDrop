@@ -3,19 +3,18 @@ import mongoose, { Schema, Document, Model } from 'mongoose';
 export interface IProduct extends Document {
   name: string;
   description: string;
-  destination: string;
+  destinationAccessPoint: mongoose.Types.ObjectId;
   currentLocation: mongoose.Types.ObjectId;
   status: 'pending' | 'in-transit' | 'delivered' | 'cancelled';
   trackingNumber?: string;
-  sender?: mongoose.Types.ObjectId;
-  recipient?: {
+  sender: mongoose.Types.ObjectId;
+  recipient: {
     name: string;
-    address: string;
-    phone?: string;
+    email: string;
+    phone: string;
   };
   createdAt: Date;
   updatedAt: Date;
-  
 }
 
 const ProductSchema: Schema<IProduct> = new Schema(
@@ -31,11 +30,10 @@ const ProductSchema: Schema<IProduct> = new Schema(
       required: [true, 'Description is required'],
       trim: true,
     },
-    destination: {
-        accessPoint: {
-            type: Schema.Types.ObjectId,
-            ref: 'AccessPoint',
-        },
+    destinationAccessPoint: {
+        type: Schema.Types.ObjectId,
+        ref: 'AccessPoint',
+        required: [true, 'Destination access point is required'],
     },
     currentLocation: {
         type: Schema.Types.ObjectId,
@@ -55,18 +53,22 @@ const ProductSchema: Schema<IProduct> = new Schema(
     sender: {
       type: Schema.Types.ObjectId,
       ref: 'User',
+      required: [true, 'Sender is required'],
     },
     recipient: {
       name: {
         type: String,
+        required: [true, 'Recipient name is required'],
         trim: true,
       },
-      address: {
+      email: {
         type: String,
+        required: [true, 'Recipient email is required'],
         trim: true,
       },
       phone: {
         type: String,
+        required: [true, 'Recipient phone is required'],
         trim: true,
       },
     },

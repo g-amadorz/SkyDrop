@@ -1,34 +1,41 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { recipientPickupSchema } from '@/lib/schemas/deliverySchema';
+import DeliveryService from '@/lib/services/deliveryService';
+import { connectMongo } from '@/lib/database/mongoose';
 
 export async function POST(request: NextRequest) {
     try {
+        await connectMongo();
+        
         const body = await request.json();
         const validatedData = recipientPickupSchema.parse(body);
 
-        // TODO: Implement DeliveryService.recipientPickup()
-        // const deliveryService = new DeliveryService();
-        // const result = await deliveryService.recipientPickup(validatedData);
+        const deliveryService = new DeliveryService();
+        const result = await deliveryService.recipientPickup(
+            validatedData.deliveryId,
+            '', // Verification code removed from schema
+            validatedData
+        );
 
         return NextResponse.json(
             {
                 success: true,
                 message: 'Package picked up by recipient successfully',
-                data: validatedData,
+                data: result,
             },
             { status: 200 }
         );
-    } catch (error) {
-        if ((error as any).name === 'ZodError') {
+    } catch (error: any) {
+        if (error.name === 'ZodError') {
             return NextResponse.json(
-                { success: false, error: 'Invalid input data', details: (error as any).errors },
+                { success: false, error: 'Invalid input data', details: error.errors },
                 { status: 400 }
             );
         }
 
         console.error('Recipient pickup error:', error);
         return NextResponse.json(
-            { success: false, error: 'Internal server error' },
+            { success: false, error: error.message || 'Internal server error' },
             { status: 500 }
         );
     }

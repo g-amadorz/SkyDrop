@@ -1,43 +1,44 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAvailablePackagesSchema } from '@/lib/schemas/deliverySchema';
+import { connectMongo } from '@/lib/database/mongoose';
+import Delivery from '@/lib/database/models/Delivery';
 
 export async function GET(request: NextRequest) {
     try {
+        await connectMongo();
+        
         const searchParams = request.nextUrl.searchParams;
-        const queryData = {
-            accessPointId: searchParams.get('accessPointId') || undefined,
-            maxDistance: searchParams.get('maxDistance') ? Number(searchParams.get('maxDistance')) : undefined,
-            minEarnings: searchParams.get('minEarnings') ? Number(searchParams.get('minEarnings')) : undefined,
-            destinationDirection: searchParams.get('destinationDirection') as 'VCC-CLARK' | 'LAFARGE' | undefined,
-        };
+        const accessPointId = searchParams.get('accessPointId');
+        const destinationDirection = searchParams.get('destinationDirection');
 
-        const validatedData = getAvailablePackagesSchema.parse(queryData);
+        // Find all deliveries awaiting pickup
+        let query: any = { status: 'awaiting-pickup' };
+        
+        if (accessPointId) {
+            query.currentAccessPoint = accessPointId;
+        }
 
-        // TODO: Implement DeliveryService.getAvailablePackages()
-        // const deliveryService = new DeliveryService();
-        // const packages = await deliveryService.getAvailablePackages(validatedData);
+        const packages = await Delivery.find(query)
+            .populate('productId')
+            .populate('shipperId')
+            .populate('originAccessPoint')
+            .populate('destinationAccessPoint')
+            .populate('currentAccessPoint')
+            .sort({ totalCost: -1 }); // Sort by highest earnings first
 
         return NextResponse.json(
             {
                 success: true,
                 data: {
-                    packages: [],
-                    filters: validatedData,
+                    packages,
+                    count: packages.length,
                 },
             },
             { status: 200 }
         );
-    } catch (error) {
-        if ((error as any).name === 'ZodError') {
-            return NextResponse.json(
-                { success: false, error: 'Invalid query parameters', details: (error as any).errors },
-                { status: 400 }
-            );
-        }
-
+    } catch (error: any) {
         console.error('Get available packages error:', error);
         return NextResponse.json(
-            { success: false, error: 'Internal server error' },
+            { success: false, error: error.message || 'Internal server error' },
             { status: 500 }
         );
     }
