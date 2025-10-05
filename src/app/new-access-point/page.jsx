@@ -10,12 +10,7 @@ const MapContainer = dynamic(() => import("react-leaflet").then(mod => mod.MapCo
 const TileLayer = dynamic(() => import("react-leaflet").then(mod => mod.TileLayer), { ssr: false });
 const Marker = dynamic(() => import("react-leaflet").then(mod => mod.Marker), { ssr: false });
 const Circle = dynamic(() => import("react-leaflet").then(mod => mod.Circle), { ssr: false });
-import { useMapEvent } from "react-leaflet";
-// Component to handle map clicks using useMapEvent
-function MapClickHandler({ onClick }) {
-  useMapEvent('click', onClick);
-  return null;
-}
+
 
 const DEFAULT_RADIUS = 500; // meters
 
@@ -67,8 +62,9 @@ const NewAccessPointPage = ({ radius = DEFAULT_RADIUS }) => {
 
   const canPlace = nearest && nearest.dist <= radius;
 
-  const handleMapClick = e => {
-    setPin([e.latlng.lat, e.latlng.lng]);
+  // Only allow pin placement by clicking inside a station's circle
+  const handleCircleClick = (coords) => {
+    setPin(coords);
     setError("");
     setName("");
     setNameTouched(false);
@@ -108,8 +104,6 @@ const NewAccessPointPage = ({ radius = DEFAULT_RADIUS }) => {
           zoom={12}
           style={{ height: "100%", width: "100%" }}
         >
-          {/* Attach map click handler */}
-          <MapClickHandler onClick={handleMapClick} />
           <TileLayer
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             attribution="&copy; OpenStreetMap contributors"
@@ -117,15 +111,17 @@ const NewAccessPointPage = ({ radius = DEFAULT_RADIUS }) => {
 
           {stations.map(([name, coords]) => (
             <React.Fragment key={name}>
-              <Marker position={coords} />
+              {/* Hide station markers; only show the clickable circles */}
               <Circle
                 center={coords}
                 radius={radius}
                 pathOptions={{ color: "#1976d2", fillOpacity: 0.08, weight: 1 }}
+                eventHandlers={{ click: () => handleCircleClick(coords) }}
               />
             </React.Fragment>
           ))}
 
+          {/* Only show the pin marker for the current placement, not for all access points */}
           {pin && <Marker position={pin} />}
         </MapContainer>
       </Box>
