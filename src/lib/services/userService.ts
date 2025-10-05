@@ -1,5 +1,5 @@
 import { createAccountInput, updateAccountInput } from '@/lib/schemas/accountSchema';
-import { IUser } from '@/lib/database/models/User';
+import { IUser } from '@/lib/database/models/user';
 import { UserRepository } from '@/lib/database/repository/userRepository';
 import bcrypt from 'bcrypt';
 
