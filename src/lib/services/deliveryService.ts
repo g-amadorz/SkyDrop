@@ -41,7 +41,7 @@ export default class DeliveryService {
             throw new Error('Product not found');
         }
 
-        const totalDeliveryCost = await this.calculateDeliveryCost();
+        const totalDeliveryCost = await this.calculateDeliveryCost(deliveryData.originAccessPoint, deliveryData.destinationAccessPoint);
         
         // TODO: Implement validateShipperBalance error handling
         try {
@@ -145,7 +145,7 @@ export default class DeliveryService {
         const newActualDistance = delivery.actualDistance + distance;
 
         // Check if this is final destination
-        const isFinalDestination = delivery.destinationAccessPoint.toString() === accessPointId;
+        const isFinalDestination = delivery.destinationAccessPoint == currentAccessPoint._id;
         
         const updatedDelivery = await this.deliveryRepository.updateDelivery(deliveryId, {
             status: isFinalDestination ? 'ready-for-recipient' : 'awaiting-pickup',
@@ -237,15 +237,36 @@ export default class DeliveryService {
     }
 
     // 6. PRICING & CALCULATION
-    async calculateDeliveryCost(): Promise<number>{
-        // - Get origin and destination coordinates
-        // - Calculate distance using Haversine formula
-        // - Apply pricing formula:
-        //   baseCost = (distance * RATE_PER_KM) + (weight * RATE_PER_KG)
-        //   totalCost = baseCost * priorityMultiplier * demandMultiplier
-        // - Return estimated cost
+    async calculateDeliveryCost(originAccessPointId: string, destinationAccessPointId: string): Promise<number>{
+        const originAccessPoint = await this.accessPointService.findAccessPointById(originAccessPointId);
+        const destinationAccessPoint = await this.accessPointService.findAccessPointById(destinationAccessPointId);
 
-        return 0;
+        if (!originAccessPoint || !destinationAccessPoint) {
+            throw new Error('Access point not found');
+        }
+
+        // Import the network calculation function
+        const { calculateStationDistance } = await import('@/lib/data/skytrainNetwork');
+
+        // Calculate distance using SkyTrain network graph
+        const distance = calculateStationDistance(
+            originAccessPoint.stationId,
+            destinationAccessPoint.stationId
+        );
+
+        // Pricing constants
+        const RATE_PER_KM = 0.75; // $0.75 per km
+        const BASE_FEE = 3.00; // Minimum delivery fee
+        const PLATFORM_FEE_PERCENTAGE = 0.10; // 10% platform fee
+
+        // Calculate base cost
+        const baseCost = (distance * RATE_PER_KM) + BASE_FEE;
+
+        // Add platform fee
+        const totalCost = baseCost * (1 + PLATFORM_FEE_PERCENTAGE);
+
+        // Round to 2 decimal places
+        return Math.round(totalCost * 100) / 100;
     }
 
     private calculateLegEarnings(legDistance: number, totalDistance: number, totalCost: number): number {
