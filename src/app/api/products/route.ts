@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ProductService } from '@/lib/services/productService';
 import { createProductSchema } from '@/lib/schemas/productSchema';
-import shipperBalance from '@/middlewares/shipperBalance';
 
 const productService = new ProductService();
 
@@ -18,12 +17,6 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-    // Run middleware to check shipper balance
-    const middlewareResponse = await shipperBalance(request);
-    if (middlewareResponse.status !== 200) {
-        return middlewareResponse;
-    }
-    
     try {
         const body = await request.json();
         const validatedData = createProductSchema.parse(body);
