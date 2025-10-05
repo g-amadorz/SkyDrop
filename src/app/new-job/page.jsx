@@ -161,11 +161,23 @@ const NewJob = () => {
 
       <List>
         {availableProducts.map((product) => (
-          <ListItem key={product.id} divider>
-            <ListItemText
-              primary={`From: ${product.currApId} → ${product.destApId}`}
-              secondary={`Hops: ${bfsShortestPath(skytrainGraph, product.currApId, product.destApId).hops}`}
-            />
+          <ListItem key={product.id} divider alignItems="flex-start">
+            <Box sx={{ width: '100%', display: 'flex', flexDirection: 'column' }}>
+              <ListItemText
+                primary={`From: ${product.currApId} → ${product.destApId}`}
+                secondary={`Hops: ${bfsShortestPath(skytrainGraph, product.currApId, product.destApId).hops}`}
+              />
+              <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 1 }}>
+                <Button
+                  size="small"
+                  variant="contained"
+                  onClick={() => handleClaim(product.id)}
+                  disabled={selectedProduct === product.id || !isValidPhone}
+                >
+                  {selectedProduct === product.id ? "Claimed" : "Claim"}
+                </Button>
+              </Box>
+            </Box>
           </ListItem>
         ))}
       </List>
