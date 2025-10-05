@@ -39,8 +39,9 @@ const isAdminPage = createRouteMatcher([
  * 🔒 Admin check — replace with your own logic (metadata, org role, etc.)
  */
 async function ensureAdmin(auth: ClerkMiddlewareAuth) {
-  const { sessionClaims } = auth();
-  const isAdmin = Boolean(sessionClaims?.publicMetadata?.isAdmin);
+  const { sessionClaims } = await auth();
+  // Type assertion to allow access to custom claims
+  const isAdmin = Boolean((sessionClaims as any)?.publicMetadata?.isAdmin);
   return isAdmin;
 }
 
@@ -54,9 +55,10 @@ export default clerkMiddleware(async (auth, req) => {
   }
 
   // 2️⃣ Require auth for everything else
-  const { userId } = auth();
+  const authResult = await auth();
+  const { userId } = authResult;
   if (!userId) {
-    return auth().redirectToSignIn({ returnBackUrl: req.url });
+    return authResult.redirectToSignIn({ returnBackUrl: req.url });
   }
 
   // 3️⃣ Optional: gate admin routes
