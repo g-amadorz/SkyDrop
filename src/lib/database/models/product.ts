@@ -4,7 +4,7 @@ export interface IProduct extends Document {
   name: string;
   description: string;
   destination: string;
-  currentLocation: string;
+  currentLocation: mongoose.Types.ObjectId;
   status: 'pending' | 'in-transit' | 'delivered' | 'cancelled';
   trackingNumber?: string;
   sender?: mongoose.Types.ObjectId;
@@ -15,10 +15,12 @@ export interface IProduct extends Document {
   };
   createdAt: Date;
   updatedAt: Date;
+  
 }
 
 const ProductSchema: Schema<IProduct> = new Schema(
-  {
+  { 
+    
     name: {
       type: String,
       required: [true, 'Package name is required'],
