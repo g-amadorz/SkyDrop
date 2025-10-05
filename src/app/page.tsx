@@ -169,7 +169,7 @@ export default function MainPage() {
             <div className="flex justify-center gap-4">
               {/* Sign In Button */}
               <Link href="/signin">
-                <button onClick={}
+                <button
                   className={`px-6 py-3 rounded-full font-semibold transition border ${colors.border} ${colors.text} hover:bg-gray-50`}
                 >
                   Sign In
