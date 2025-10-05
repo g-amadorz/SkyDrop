@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { AccessPointService } from '@/lib/services/accessPointService';
 import { createAccessPointSchema } from '@/lib/schemas/accessPointSchema';
+import { connectMongo } from '@/lib/database/mongoose';
 
 const accessPointService = new AccessPointService();
 
 export async function GET() {
     try {
+        await connectMongo();
         const accessPoints = await accessPointService.getAllAccessPoints();
         return NextResponse.json({ success: true, data: accessPoints });
     } catch (error) {
@@ -18,20 +20,32 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
     try {
+        await connectMongo();
         const body = await request.json();
         const validatedData = createAccessPointSchema.parse(body);
         
         const accessPoint = await accessPointService.createAccessPoint(validatedData);
         return NextResponse.json({ success: true, data: accessPoint }, { status: 201 });
     } catch (error: any) {
+        console.error('Access point creation error:', error);
+        
         if (error.name === 'ZodError') {
             return NextResponse.json(
                 { success: false, error: 'Invalid input data', details: error.errors },
                 { status: 400 }
             );
         }
+        
+        // Mongoose validation error
+        if (error.name === 'ValidationError') {
+            return NextResponse.json(
+                { success: false, error: 'Database validation failed', details: error.message },
+                { status: 400 }
+            );
+        }
+        
         return NextResponse.json(
-            { success: false, error: 'Failed to create access point' },
+            { success: false, error: 'Failed to create access point', details: error.message },
             { status: 500 }
         );
     }

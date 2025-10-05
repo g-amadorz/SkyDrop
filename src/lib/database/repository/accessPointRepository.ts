@@ -1,6 +1,6 @@
-import AccessPoint from "@/lib/database/models/accessPointSchema";
+import AccessPoint from "@/lib/database/models/AccessPointSchema";
 import { createAccessPointInput, updateAccessPointInput } from "@/lib/schemas/accessPointSchema";
-import { IAccessPoint } from "@/lib/database/models/accessPointSchema";
+import { IAccessPoint } from "@/lib/database/models/AccessPointSchema";
 
 
 export class AccessPointRepository {
@@ -16,7 +16,23 @@ export class AccessPointRepository {
     }
 
     async findAccessPointByName(name: string): Promise<IAccessPoint | null> {
-        return await AccessPoint.findOne({ name: name.toLowerCase() });
+        return await AccessPoint.findOne({ name });
+    }
+
+    async findAccessPointsByStation(stationName: string): Promise<IAccessPoint[]> {
+        return await AccessPoint.find({ nearestStation: stationName });
+    }
+
+    async findAccessPointsByAccount(accountId: string): Promise<IAccessPoint[]> {
+        return await AccessPoint.find({ account: accountId });
+    }
+
+    async findNearbyAccessPoints(lat: number, lng: number, maxDistance: number = 5000): Promise<IAccessPoint[]> {
+        // Find access points within maxDistance meters (default 5km)
+        return await AccessPoint.find({
+            lat: { $gte: lat - (maxDistance / 111000), $lte: lat + (maxDistance / 111000) },
+            lng: { $gte: lng - (maxDistance / 111000), $lte: lng + (maxDistance / 111000) }
+        });
     }
 
     async updateAccessPoint(id: string, accessPointData: updateAccessPointInput): Promise<IAccessPoint | null> {
@@ -30,12 +46,8 @@ export class AccessPointRepository {
         return await AccessPoint.findByIdAndDelete(id);
     }
 
-    async findAccessPointsByStatus(status: 'pending' | 'in-transit' | 'delivered' | 'cancelled'): Promise<IAccessPoint[]> {
-        return await AccessPoint.find({ status }).select('-password');
-    }
-
     async getAllAccessPoints(): Promise<IAccessPoint[]> {
-        return await AccessPoint.find({}).select('-password');
+        return await AccessPoint.find({});
     }
 }
 
