@@ -31,8 +31,8 @@ const Page = () => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     // Calculate cost and show approval dialog
-    const cost = calculateCost();
-    setCalculatedCost(cost);
+    const { hops, path } = calculateCost();
+    setCalculatedCost(hops);
     setShowApproval(true);
   };
 

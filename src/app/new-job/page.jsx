@@ -87,7 +87,7 @@ const NewJob = () => {
                 <CardContent>
                   <Typography variant="body2">
                     From <b>{job.currApId}</b> → <b>{job.destApId}</b><br />
-                    Hops: {job.price}
+                    Hops: {bfsShortestPath(skytrainGraph, job.currApId, job.destApId).hops}
                   </Typography>
                 </CardContent>
                 <CardActions>
@@ -153,7 +153,7 @@ const NewJob = () => {
           <ListItem key={product.id} divider>
             <ListItemText
               primary={`From: ${product.currApId} → ${product.destApId}`}
-              secondary={`Hops: ${product.price}`}
+              secondary={`Hops: ${bfsShortestPath(skytrainGraph, product.currApId, product.destApId).hops}`}
             />
           </ListItem>
         ))}
