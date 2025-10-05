@@ -1,5 +1,5 @@
 // Expo and Millennium Line adjacency list
-const skytrainGraph = {
+export const skytrainGraph = {
 	"Waterfront": ["Burrard", "Granville"],
 	"Burrard": ["Waterfront", "Granville"],
 	"Granville": ["Burrard", "Waterfront", "Stadium-Chinatown"],

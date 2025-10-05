@@ -15,17 +15,17 @@ export const ProductProvider = ({ children }) => {
     };
 
     // Simple product object
-    const create = (currApId, destApId, commuterPN) => {
+    const create = (currApId, destApId, price) => {
         setProducts(prevProducts => {
             const newProduct = {
                 id: prevProducts.length === 0 ? 0 : Math.max(...prevProducts.map(p => p.id ?? 0)) + 1,
                 currApId,
                 destApId,
-                commuterPN,
+                price,
             };
             return [...prevProducts, newProduct];
         });
-    } 
+    }
 
     // Product fetch object
     const get = (id) => {
