@@ -3,7 +3,8 @@ import { z } from 'zod'
 export const createAccessPointSchema = z.object({
     name: z.string(),
     location: z.string(),
-    account: z.string()
+    account: z.string(),
+    stationId: z.string(),
 })
 
 export const updateAccessPointSchema = createAccessPointSchema.partial()

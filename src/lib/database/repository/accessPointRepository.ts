@@ -1,6 +1,6 @@
-import AccessPoint from "@/lib/database/models/AccessPointSchema";
+import AccessPoint from "@/lib/database/models/accessPointSchema";
 import { createAccessPointInput, updateAccessPointInput } from "@/lib/schemas/accessPointSchema";
-import { IAccessPoint } from "@/lib/database/models/AccessPointSchema";
+import { IAccessPoint } from "@/lib/database/models/accessPointSchema";
 
 
 export class AccessPointRepository {
