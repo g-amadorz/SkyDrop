@@ -18,7 +18,7 @@ export interface IDelivery extends Document {
   originAccessPoint: mongoose.Types.ObjectId;
   destinationAccessPoint: mongoose.Types.ObjectId;
   currentAccessPoint: mongoose.Types.ObjectId;
-  status: 'awaiting-pickup' | 'in-transit' | 'at-intermediate' | 'ready-for-recipient' | 'completed' | 'cancelled';
+  status: 'awaiting-pickup' | 'in-transit' | 'ready-for-recipient' |;
   legs: IDeliveryLeg[];
   totalCost: number;
   paidAmount: number;
@@ -105,7 +105,7 @@ const DeliverySchema: Schema<IDelivery> = new Schema(
     },
     status: {
       type: String,
-      enum: ['awaiting-pickup', 'in-transit', 'at-intermediate', 'ready-for-recipient', 'completed', 'cancelled'],
+      enum: ['awaiting-pickup', 'in-transit', 'ready-for-recipient'],
       default: 'awaiting-pickup',
     },
     legs: [DeliveryLegSchema],
