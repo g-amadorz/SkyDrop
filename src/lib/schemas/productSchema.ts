@@ -1,9 +1,9 @@
 import { z } from 'zod'
-
+import { recipientSchema } from './recipientSchema'
 export const createProductSchema = z.object({
     name: z.string(),
     description: z.string(),
-    destination: z.string(),
+    recipient: recipientSchema,
 })
 
 export const updateProductSchema = createProductSchema.partial()
