@@ -85,6 +85,13 @@ const NewJob = () => {
   const [openJobId, setOpenJobId] = useState(null);
 
   // Only show pickup (origin) markers for currApId (stations and access points)
+  // Helper to resolve to station if access point
+  const resolveToStation = (name) => {
+    const ap = accessPoints.find(ap => ap.name === name);
+    if (ap && ap.nearestStation) return ap.nearestStation;
+    return name;
+  };
+
   const markers = useMemo(() => {
     // Collect all unique currApId values
     const pickupNames = Array.from(new Set(availableProducts.map(p => p.currApId)));
@@ -93,7 +100,7 @@ const NewJob = () => {
     if (openJobId) {
       const openJob = availableProducts.find(j => j.id === openJobId);
       if (openJob) {
-        const { path } = bfsShortestPath(skytrainGraph, openJob.currApId, openJob.destApId);
+        const { path } = bfsShortestPath(skytrainGraph, resolveToStation(openJob.currApId), resolveToStation(openJob.destApId));
         if (path && path.length > 1) pathEndStation = path[path.length - 1];
       }
     }
@@ -120,7 +127,7 @@ const NewJob = () => {
             <Box sx={{ maxHeight: 300, overflowY: 'auto', width: 250 }}>
               {relatedJobs.map(job => {
                 // Get path for this job
-                const { path } = bfsShortestPath(skytrainGraph, job.currApId, job.destApId);
+                const { path } = bfsShortestPath(skytrainGraph, resolveToStation(job.currApId), resolveToStation(job.destApId));
                 // Default drop-off is the last station
                 const selectedDrop = dropOffSelections[job.id] || path[path.length - 1];
                 return (
@@ -143,7 +150,7 @@ const NewJob = () => {
                         </Select>
                       </Box>
                       <Typography variant="body2" sx={{ m: 0 }} style={{margin: "8px 0 0 0"}}>
-                        Hops: {bfsShortestPath(skytrainGraph, job.currApId, selectedDrop).hops}
+                        Hops: {bfsShortestPath(skytrainGraph, resolveToStation(job.currApId), selectedDrop).hops}
                       </Typography>
                     </CardContent>
                     <CardActions>
@@ -189,7 +196,11 @@ const NewJob = () => {
   // Use selected drop-off for open job if set
   let openPath = [];
   if (openJob) {
-    const { path } = bfsShortestPath(skytrainGraph, openJob.currApId, openJob.destApId);
+    const { path } = bfsShortestPath(
+      skytrainGraph,
+      resolveToStation(openJob.currApId),
+      resolveToStation(openJob.destApId)
+    );
     const selectedDrop = dropOffSelections[openJob.id] || path[path.length - 1];
     const dropIdx = path.indexOf(selectedDrop);
     openPath = dropIdx > 0 ? path.slice(0, dropIdx + 1) : path;
@@ -225,7 +236,7 @@ const NewJob = () => {
                     From: {product.currApId} → {product.destApId}
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
-                    Hops: {bfsShortestPath(skytrainGraph, product.currApId, product.destApId).hops}
+                    Hops: {bfsShortestPath(skytrainGraph, resolveToStation(product.currApId), resolveToStation(product.destApId)).hops}
                   </Typography>
                 </Box>
                 <Button
