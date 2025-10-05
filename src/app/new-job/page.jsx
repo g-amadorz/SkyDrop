@@ -27,8 +27,9 @@ const MapContainer = dynamic(() => import("react-leaflet").then(mod => mod.MapCo
 const TileLayer = dynamic(() => import("react-leaflet").then(mod => mod.TileLayer), { ssr: false });
 const Marker = dynamic(() => import("react-leaflet").then(mod => mod.Marker), { ssr: false });
 const Popup = dynamic(() => import("react-leaflet").then(mod => mod.Popup), { ssr: false });
+const Polyline = dynamic(() => import("react-leaflet").then(mod => mod.Polyline), { ssr: false });
 
-import { stationCoords } from "../compute/CalcHops";
+import { stationCoords, bfsShortestPath, skytrainGraph } from "../compute/CalcHops";
 
 const NewJob = () => {
   useEffect(() => {
@@ -66,6 +67,9 @@ const NewJob = () => {
     }
   };
 
+  // Track which job popup is open
+  const [openJobId, setOpenJobId] = useState(null);
+
   // Only show pickup (origin) markers for currApId
   const markers = useMemo(() => {
     const pickupStations = Array.from(new Set(availableProducts.map(p => p.currApId)));
@@ -74,7 +78,9 @@ const NewJob = () => {
       const relatedJobs = availableProducts.filter(p => p.currApId === name);
       return (
         <Marker key={name} position={[lat, lng]}>
-          <Popup>
+          <Popup
+            onOpen={() => setOpenJobId(null)}
+          >
             <Typography variant="subtitle1" fontWeight="bold">{name}</Typography>
             {relatedJobs.map(job => (
               <Card key={job.id} sx={{ my: 1 }}>
@@ -88,10 +94,19 @@ const NewJob = () => {
                   <Button
                     size="small"
                     variant="contained"
-                    onClick={() => handleClaim(job.id)}
+                    onClick={() => { handleClaim(job.id); }}
                     disabled={selectedProduct === job.id || !isValidPhone}
+                    onMouseEnter={() => setOpenJobId(job.id)}
+                    onFocus={() => setOpenJobId(job.id)}
                   >
                     {selectedProduct === job.id ? "Claimed" : "Claim"}
+                  </Button>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={() => setOpenJobId(job.id)}
+                  >
+                    Show Path
                   </Button>
                 </CardActions>
               </Card>
@@ -101,6 +116,10 @@ const NewJob = () => {
       );
     });
   }, [availableProducts, selectedProduct, phone]);
+
+  // Get the path for the open job (if any)
+  const openJob = openJobId ? availableProducts.find(j => j.id === openJobId) : null;
+  const openPath = openJob ? bfsShortestPath(skytrainGraph, openJob.currApId, openJob.destApId).path : [];
 
   // Job list component
   const JobList = (
@@ -164,7 +183,7 @@ const NewJob = () => {
       )}
 
       {/* Map Section */}
-      <Box sx={{ flexGrow: 1 }}>
+      <Box sx={{ flexGrow: 1, position: 'relative' }}>
         <MapContainer
           center={[49.25, -123.1]}
           zoom={11}
@@ -176,6 +195,27 @@ const NewJob = () => {
             attribution="&copy; OpenStreetMap contributors"
           />
           {markers}
+          {/* Draw path for open job */}
+          {openPath.length > 1 && (
+            <>
+              {/* Polyline for the path */}
+              <Polyline
+                positions={openPath.map(station => stationCoords[station])}
+                pathOptions={{ color: 'blue', weight: 4 }}
+              />
+              {/* Markers for each station in the path */}
+              {openPath.map((station, idx) => {
+                const [lat, lng] = stationCoords[station];
+                let icon = undefined;
+                if (idx === 0) icon = L.icon({ iconUrl: '/blue-pin.png', iconSize: [32, 32], iconAnchor: [16, 32] });
+                else if (idx === openPath.length - 1) icon = L.icon({ iconUrl: '/red-pin.png', iconSize: [32, 32], iconAnchor: [16, 32] });
+                else icon = L.divIcon({ className: '', html: '<div style="width:12px;height:12px;background:#888;border-radius:50%;border:2px solid #fff;"></div>' });
+                return (
+                  <Marker key={station + idx} position={[lat, lng]} icon={icon} interactive={false} />
+                );
+              })}
+            </>
+          )}
         </MapContainer>
       </Box>
 

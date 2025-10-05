@@ -83,21 +83,24 @@ export const skytrainGraph = {
 	"Lafarge Lake-Douglas": ["Lincoln"]
 };
 
-// BFS function to find shortest path (number of stations)
+// BFS function to find shortest path (returns { hops, path })
 export function bfsShortestPath(graph, start, end) {
-	const queue = [[start, 0]];
+	if (start === end) return { hops: 0, path: [start] };
+	const queue = [[start, [start]]];
 	const visited = new Set([start]);
 	while (queue.length > 0) {
-		const [station, depth] = queue.shift();
-		if (station === end) return depth;
+		const [station, path] = queue.shift();
 		for (const neighbor of (graph[station] || [])) {
 			if (!visited.has(neighbor)) {
+				if (neighbor === end) {
+					return { hops: path.length, path: [...path, neighbor] };
+				}
 				visited.add(neighbor);
-				queue.push([neighbor, depth + 1]);
+				queue.push([neighbor, [...path, neighbor]]);
 			}
 		}
 	}
-	return -1; // No path found
+	return { hops: -1, path: [] }; // No path found
 }
 
 // Example usage:
