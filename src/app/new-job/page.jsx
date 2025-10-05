@@ -191,11 +191,11 @@ const NewJob = () => {
         <>
           <IconButton
             onClick={() => setDrawerOpen(true)}
-            sx={{ position: "absolute", top: 10, left: 10, zIndex: 1000, bgcolor: "white" }}
+            sx={{ position: "absolute", top: 10, right: 10, zIndex: 1000, bgcolor: "white" }}
           >
             <MenuIcon />
           </IconButton>
-          <Drawer anchor="left" open={drawerOpen} onClose={() => setDrawerOpen(false)}>
+          <Drawer anchor="right" open={drawerOpen} onClose={() => setDrawerOpen(false)}>
             {JobList}
           </Drawer>
         </>
