@@ -1,13 +1,9 @@
-    async getAllDeliveries() {
-        return await this.deliveryRepository.getAllDeliveries();
-    }
 import { DeliveryRepository } from "@/lib/database/repository/deliveryRepository";
 import { UserService } from "@/lib/services/userService";
 import { ProductService } from "@/lib/services/productService";
 import { AccessPointService } from "@/lib/services/accessPointService";
 import { InitiateDeliveryInput } from "../schemas/deliverySchema";
 import { calculateStationDistance } from "../data/skytrainNetwork";
-
 
 export default class DeliveryService {
     private deliveryRepository: DeliveryRepository;
@@ -22,6 +18,10 @@ export default class DeliveryService {
         this.accessPointService = new AccessPointService();
     }
 
+    async getAllDeliveries() {
+        return await this.deliveryRepository.getAllDeliveries();
+    }
+
     // 1. INITIATION (Shipper creates delivery)
     async initiateDelivery(shipperId: string, deliveryData: InitiateDeliveryInput) {
         const shipper = await this.userService.findUserById(shipperId);
@@ -33,9 +33,12 @@ export default class DeliveryService {
             throw new Error('User must have sender role');
         }
 
-        const product = await this.productService.findProductById(deliveryData.productId);
-        if (!product) {
-            throw new Error('Product not found');
+        // Product is optional - only check if productId is provided and not a mock value
+        if (deliveryData.productId && !deliveryData.productId.startsWith('mock-')) {
+            const product = await this.productService.findProductById(deliveryData.productId);
+            if (!product) {
+                throw new Error('Product not found');
+            }
         }
 
         // Calculate estimated cost and distance
@@ -72,10 +75,12 @@ export default class DeliveryService {
         
         const delivery = await this.deliveryRepository.createDelivery(deliveryWithCode as any);
 
-        // Update product status to pending (awaiting pickup)
-        await this.productService.updateProduct(deliveryData.productId, {
-            status: 'pending',
-        });
+        // Update product status to pending (awaiting pickup) - only if real product exists
+        if (deliveryData.productId && !deliveryData.productId.startsWith('mock-')) {
+            await this.productService.updateProduct(deliveryData.productId, {
+                status: 'pending',
+            });
+        }
 
         return delivery;
     }

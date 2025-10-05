@@ -1,12 +1,13 @@
-    async getAllDeliveries() {
-        return await Delivery.find({});
-    }
 import Delivery from "@/lib/database/models/Delivery"
 import {InitiateDeliveryInput} from "@/lib/schemas/deliverySchema"
 
 export class DeliveryRepository {
     constructor() {}
-    
+
+    async getAllDeliveries() {
+        return await Delivery.find({});
+    }
+
     async createDelivery(delivery: InitiateDeliveryInput) {
         const newDelivery = new Delivery(delivery);
         return await newDelivery.save();

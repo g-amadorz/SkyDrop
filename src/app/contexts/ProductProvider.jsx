@@ -3,9 +3,11 @@
 "use client"
 
 import { useState, useEffect } from 'react';
+import { useUser } from '@clerk/nextjs';
 import { ProductContext } from './ProductContext';
 
 export const ProductProvider = ({ children }) => {
+    const { user } = useUser();
     const [products, setProducts] = useState([]);
     const [dataLoaded, setDataLoaded] = useState(false);
 
@@ -16,15 +18,41 @@ export const ProductProvider = ({ children }) => {
     };
 
     // Create product (delivery) via API, keep name in frontend
-    const create = async ({ currApId, destApId, price, name }) => {
+    // Requires: productId, shipperId, currApId, destApId, price, name
+    const create = async ({ productId, shipperId, currApId, destApId, price, name }) => {
+        const resolvedShipperId = shipperId || user?.id;
+        
+        console.log('Create delivery called with:', { productId, resolvedShipperId, currApId, destApId, price, name });
+        
+        if (!productId || !resolvedShipperId || !currApId || !destApId) {
+            console.error('Missing fields:', { productId, resolvedShipperId, currApId, destApId });
+            throw new Error('Missing required fields: productId, shipperId, currApId, destApId');
+        }
+        
+        // First, try to create/ensure user exists in MongoDB
+        try {
+            await fetch('/api/users/create-from-clerk', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    email: user?.emailAddresses?.[0]?.emailAddress,
+                    name: user?.fullName || user?.firstName || 'User',
+                    role: 'sender'
+                }),
+            });
+        } catch (err) {
+            console.warn('Could not ensure user exists:', err);
+        }
+        
         // POST to /api/deliveries
         const res = await fetch('/api/deliveries', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
+                productId,
+                shipperId: resolvedShipperId,
                 originAccessPoint: currApId,
                 destinationAccessPoint: destApId,
-                price,
                 name, // not stored in backend, but kept in frontend
             }),
         });

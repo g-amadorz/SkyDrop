@@ -1,5 +1,6 @@
 "use client";
 import React, { useState } from "react";
+import { useUser } from "@clerk/nextjs";
 import { TextField, Button, Box, Autocomplete } from "@mui/material";
 import { useProduct } from '../contexts/ProductContext';
 import { useAccesspoint } from '../contexts/AccesspointContext';
@@ -7,9 +8,11 @@ import { bfsShortestPath, skytrainGraph } from '../compute/CalcHops';
 
 // Basic product creation form
 const Page = () => {
+  const { user } = useUser();
   const [form, setForm] = useState({
     currApId: "",
     destApId: "",
+    name: ""
   });
 
   const { create } = useProduct();
@@ -21,12 +24,12 @@ const Page = () => {
 
 
   // Helper to resolve to station if access point
-  const resolveToStation = (optionValue: string) => {
-    // Try to find in accessPoints
-    const ap = accessPoints.find((ap: any) => ap.name === optionValue);
+  const resolveToStation = (optionId: string) => {
+    // Try to find in accessPoints by ID
+    const ap = accessPoints.find((ap: any) => ap.id === optionId || ap._id === optionId);
     if (ap && ap.nearestStation) return ap.nearestStation;
-    // Otherwise, assume it's a station name
-    return optionValue;
+    // Otherwise, assume it's a station name/id
+    return optionId;
   };
 
   // Calculate hops (price) using BFS
@@ -49,9 +52,33 @@ const Page = () => {
   };
 
   const handleApprove = () => {
-    // currApId = origin, destApId = destination, price = hops
+    // TODO: Replace with real productId from product selection if needed
+    const productId = "mock-product-id";
+    const shipperId = user?.id;
+    if (!shipperId) {
+      alert("You must be signed in to create a delivery.");
+      return;
+    }
     const { hops } = calculateCost();
-    create(form.currApId, form.destApId, hops);
+    
+    console.log('handleApprove form state:', form);
+    console.log('Creating delivery with:', {
+      productId,
+      shipperId,
+      currApId: form.currApId,
+      destApId: form.destApId,
+      price: hops,
+      name: form.name
+    });
+    
+    create({
+      productId,
+      shipperId,
+      currApId: form.currApId,
+      destApId: form.destApId,
+      price: hops,
+      name: form.name
+    });
     setShowApproval(false);
   };
 
@@ -71,28 +98,35 @@ const Page = () => {
     label: `${ap.name} (Access Point) [${ap.lat?.toFixed?.(4) ?? ''}, ${ap.lng?.toFixed?.(4) ?? ''}]`,
     value: ap.name,
     type: 'accessPoint',
-    id: ap.id,
+    id: ap._id || ap.id, // Use MongoDB _id if available, fallback to id
     lat: ap.lat,
     lng: ap.lng,
   }));
-  // Map stations to option objects
-  const stationOptions = Object.keys(skytrainGraph).sort().map(station => ({
-    label: station + ' (Station)',
-    value: station,
-    type: 'station',
-    id: station,
-  }));
-  // Combine, access points first
-  const allOptions = [...accessPointOptions, ...stationOptions];
+  // Map stations to option objects - REMOVED, only use access points for deliveries
+  // const stationOptions = Object.keys(skytrainGraph).sort().map(station => ({
+  //   label: station + ' (Station)',
+  //   value: station,
+  //   type: 'station',
+  //   id: station,
+  // }));
+  // Combine, access points first - ONLY use access points now
+  const allOptions = [...accessPointOptions];
 
   return (
     <>
       <Box component="form" onSubmit={handleSubmit} sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+        <TextField
+          label="Product Name"
+          name="name"
+          value={form.name}
+          onChange={handleChange}
+          required
+        />
         <Autocomplete
           options={allOptions}
           getOptionLabel={option => option.label}
-          value={allOptions.find(opt => opt.value === form.currApId) || null}
-          onChange={(_, newValue) => setForm(f => ({ ...f, currApId: newValue ? newValue.value : "" }))}
+          value={allOptions.find(opt => opt.id === form.currApId) || null}
+          onChange={(_, newValue) => setForm(f => ({ ...f, currApId: newValue ? newValue.id : "" }))}
           renderInput={(params) => (
             <TextField {...params} label="Origin (Access Point or Station)" required />
           )}
@@ -100,8 +134,8 @@ const Page = () => {
         <Autocomplete
           options={allOptions}
           getOptionLabel={option => option.label}
-          value={allOptions.find(opt => opt.value === form.destApId) || null}
-          onChange={(_, newValue) => setForm(f => ({ ...f, destApId: newValue ? newValue.value : "" }))}
+          value={allOptions.find(opt => opt.id === form.destApId) || null}
+          onChange={(_, newValue) => setForm(f => ({ ...f, destApId: newValue ? newValue.id : "" }))}
           renderInput={(params) => (
             <TextField {...params} label="Destination (Access Point or Station)" required />
           )}

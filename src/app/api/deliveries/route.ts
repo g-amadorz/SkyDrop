@@ -1,3 +1,24 @@
+
+export async function POST(request: NextRequest) {
+    try {
+        await connectMongo();
+        const body = await request.json();
+        // Validate input (basic, for now)
+        const { productId, shipperId, originAccessPoint, destinationAccessPoint } = body;
+        if (!productId || !shipperId || !originAccessPoint || !destinationAccessPoint) {
+            return NextResponse.json({ success: false, error: 'Missing required fields' }, { status: 400 });
+        }
+        const deliveryService = new DeliveryService();
+    const delivery = await deliveryService.initiateDelivery(shipperId, { productId, shipperId, originAccessPoint, destinationAccessPoint });
+        return NextResponse.json({ success: true, data: delivery }, { status: 201 });
+    } catch (error: any) {
+        console.error('Create delivery error:', error);
+        return NextResponse.json(
+            { success: false, error: error.message || 'Internal server error' },
+            { status: 500 }
+        );
+    }
+}
 import { NextRequest, NextResponse } from 'next/server';
 import { connectMongo } from '@/lib/database/mongoose';
 import DeliveryService from '@/lib/services/deliveryService';

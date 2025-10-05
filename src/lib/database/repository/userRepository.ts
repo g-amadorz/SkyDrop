@@ -9,7 +9,12 @@ export class UserRepository {
     }
 
     async findUserById(id: string): Promise<IUser | null> {
-        return await User.findById(id).select('-password');
+        // Try to find by MongoDB _id, fallback to clerkId
+        if (/^[a-fA-F0-9]{24}$/.test(id)) {
+            return await User.findById(id).select('-password');
+        } else {
+            return await User.findOne({ clerkId: id }).select('-password');
+        }
     }
 
     async findUserByEmail(email: string): Promise<IUser | null> {
