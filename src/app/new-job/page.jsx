@@ -17,6 +17,7 @@ import {
   CardActions
 } from "@mui/material";
 import MenuIcon from "@mui/icons-material/Menu";
+import CloseIcon from "@mui/icons-material/Close";
 import { useProduct } from "../contexts/ProductContext";
 import dynamic from "next/dynamic";
 import useMediaQuery from "@mui/material/useMediaQuery";
@@ -141,13 +142,12 @@ const NewJob = () => {
   const openJob = openJobId ? availableProducts.find(j => j.id === openJobId) : null;
   const openPath = openJob ? bfsShortestPath(skytrainGraph, openJob.currApId, openJob.destApId).path : [];
 
-  // Job list component
+  // Job list component for desktop
   const JobList = (
     <Box sx={{ width: 280, p: 2 }}>
       <Typography variant="h6" sx={{ mb: 2 }}>
         Available Jobs
       </Typography>
-
       <TextField
         label="Your Phone Number"
         value={phone}
@@ -158,16 +158,23 @@ const NewJob = () => {
         helperText={!isValidPhone && phone.length > 0 ? "Enter a valid 10-digit phone number" : ""}
         sx={{ mb: 2 }}
       />
-
       <List>
-        {availableProducts.map((product) => (
-          <ListItem key={product.id} divider alignItems="flex-start">
-            <Box sx={{ width: '100%', display: 'flex', flexDirection: 'column' }}>
-              <ListItemText
-                primary={`From: ${product.currApId} → ${product.destApId}`}
-                secondary={`Hops: ${bfsShortestPath(skytrainGraph, product.currApId, product.destApId).hops}`}
-              />
-              <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 1 }}>
+        {availableProducts.length === 0 ? (
+          <ListItem>
+            <ListItemText primary="No jobs available" />
+          </ListItem>
+        ) : (
+          availableProducts.map((product) => (
+            <ListItem key={product.id} divider alignItems="flex-start">
+              <Box sx={{ width: '100%', display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Box>
+                  <Typography variant="body1">
+                    From: {product.currApId} → {product.destApId}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Hops: {bfsShortestPath(skytrainGraph, product.currApId, product.destApId).hops}
+                  </Typography>
+                </Box>
                 <Button
                   size="small"
                   variant="contained"
@@ -177,9 +184,67 @@ const NewJob = () => {
                   {selectedProduct === product.id ? "Claimed" : "Claim"}
                 </Button>
               </Box>
-            </Box>
+            </ListItem>
+          ))
+        )}
+      </List>
+    </Box>
+  );
+
+  // Job list component for mobile with close button inline with title
+  const JobListMobile = (
+    <Box sx={{ width: 280, p: 2 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+        <Typography variant="h6" sx={{ mb: 0 }}>
+          Available Jobs
+        </Typography>
+        <IconButton
+          onClick={() => setDrawerOpen(false)}
+          sx={{ bgcolor: 'transparent', '&:hover': { bgcolor: 'transparent' }, m: 0, p: 1 }}
+          aria-label="Close menu"
+        >
+          <CloseIcon fontSize="large" />
+        </IconButton>
+      </Box>
+      <TextField
+        label="Your Phone Number"
+        value={phone}
+        onChange={(e) => setPhone(e.target.value)}
+        fullWidth
+        placeholder="e.g. 6041234567"
+        error={phone.length > 0 && !isValidPhone}
+        helperText={!isValidPhone && phone.length > 0 ? "Enter a valid 10-digit phone number" : ""}
+        sx={{ mb: 2 }}
+      />
+      <List>
+        {availableProducts.length === 0 ? (
+          <ListItem>
+            <ListItemText primary="No jobs available" />
           </ListItem>
-        ))}
+        ) : (
+          availableProducts.map((product) => (
+            <ListItem key={product.id} divider alignItems="flex-start">
+              <Box sx={{ width: '100%', display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Box>
+                  <Typography variant="body1">
+                    From: {product.currApId} → {product.destApId}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Hops: {bfsShortestPath(skytrainGraph, product.currApId, product.destApId).hops}
+                  </Typography>
+                </Box>
+                <Button
+                  size="small"
+                  variant="contained"
+                  onClick={() => handleClaim(product.id)}
+                  disabled={selectedProduct === product.id || !isValidPhone}
+                >
+                  {selectedProduct === product.id ? "Claimed" : "Claim"}
+                </Button>
+              </Box>
+            </ListItem>
+          ))
+        )}
       </List>
     </Box>
   );
@@ -196,7 +261,7 @@ const NewJob = () => {
             <MenuIcon />
           </IconButton>
           <Drawer anchor="right" open={drawerOpen} onClose={() => setDrawerOpen(false)}>
-            {JobList}
+            {JobListMobile}
           </Drawer>
         </>
       ) : (
