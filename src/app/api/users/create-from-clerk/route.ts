@@ -15,17 +15,29 @@ export async function POST(request: NextRequest) {
             );
         }
 
+        // Parse body first
+        const body = await request.json();
+        const { email, name, role = 'sender' } = body;
+
         // Check if user already exists
         const existingUser = await User.findOne({ clerkId: userId });
         if (existingUser) {
+            // Update role if user wants to be a rider (allow users to be both sender and rider)
+            if (role && role !== existingUser.role) {
+                // Allow upgrading to 'both' if user wants to be both sender and rider
+                if ((existingUser.role === 'sender' && role === 'rider') || 
+                    (existingUser.role === 'rider' && role === 'sender')) {
+                    existingUser.role = 'both';
+                    await existingUser.save();
+                    console.log(`Upgraded user ${existingUser.email} role to 'both'`);
+                }
+            }
+            
             return NextResponse.json(
                 { success: true, message: 'User already exists', data: existingUser },
                 { status: 200 }
             );
         }
-
-        const body = await request.json();
-        const { email, name, role = 'sender' } = body;
 
         // Create new user with Clerk ID
         const newUser = await User.create({

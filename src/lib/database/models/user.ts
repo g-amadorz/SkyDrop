@@ -1,10 +1,11 @@
 import mongoose, { Schema, Document, Model } from 'mongoose';
 
 export interface IUser extends Document {
+  clerkId?: string;
   email: string;
   password: string;
   name: string;
-  role: 'rider' | 'sender' | 'admin';
+  role: 'rider' | 'sender' | 'both' | 'admin';
   points: number;
   createdAt: Date;
   updatedAt: Date;
@@ -41,7 +42,7 @@ const UserSchema: Schema<IUser> = new Schema(
     },
     role: {
       type: String,
-      enum: ['rider', 'sender', 'admin'],
+      enum: ['rider', 'sender', 'both', 'admin'],
       required: [true, 'Role is required'],
       default: 'sender',
     },

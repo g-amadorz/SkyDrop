@@ -29,7 +29,7 @@ export default class DeliveryService {
             throw new Error('Shipper not found');
         }
 
-        if (shipper.role !== 'sender' && shipper.role !== 'admin') {
+        if (shipper.role !== 'sender' && shipper.role !== 'both' && shipper.role !== 'admin') {
             throw new Error('User must have sender role');
         }
 
@@ -116,7 +116,7 @@ export default class DeliveryService {
             throw new Error('Commuter not found');
         }
 
-        if (commuter.role !== 'rider' && commuter.role !== 'admin') {
+        if (commuter.role !== 'rider' && commuter.role !== 'both' && commuter.role !== 'admin') {
             throw new Error('User must have rider role');
         }
 

@@ -67,6 +67,7 @@ export default function NewJob() {
         const res = await fetch('/api/deliveries?status=awaiting-pickup');
         const data = await res.json();
         if (data.success && data.data?.deliveries) {
+          console.log('Fetched deliveries:', data.data.deliveries);
           setDeliveries(data.data.deliveries);
         }
       } catch (error) {
@@ -178,7 +179,7 @@ export default function NewJob() {
     setLoading(true);
     try {
       // First, ensure user exists in MongoDB
-      await fetch('/api/users/create-from-clerk', {
+      const userResponse = await fetch('/api/users/create-from-clerk', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -187,6 +188,9 @@ export default function NewJob() {
           role: 'rider'
         }),
       });
+      
+      const userData = await userResponse.json();
+      console.log('User creation/update response:', userData);
 
       // Claim the package
       const res = await fetch('/api/deliveries/claim', {
@@ -195,10 +199,12 @@ export default function NewJob() {
         body: JSON.stringify({
           commuterId: user.id,
           deliveryId,
+          packageIds: [deliveryId], // Schema requires packageIds array
         }),
       });
 
       const data = await res.json();
+      console.log('Claim response:', data);
       
       if (data.success) {
         setSelectedDelivery(deliveryId);
@@ -236,9 +242,12 @@ export default function NewJob() {
 
   // Markers for all deliveries
   const allMarkers = useMemo(() => {
+    if (!mounted || deliveriesToShow.length === 0) return [];
+    
     const L = typeof window !== "undefined" ? require("leaflet") : null;
-    if (!L || deliveriesToShow.length === 0) return [];
+    if (!L) return [];
 
+    console.log('Creating markers for deliveries:', deliveriesToShow.length);
     const markers = [];
     deliveriesToShow.forEach((delivery, deliveryIdx) => {
       const originAP = getAccessPointById(delivery.originAccessPoint);
@@ -246,6 +255,13 @@ export default function NewJob() {
       
       const originStation = resolveToStation(delivery.originAccessPoint);
       const destStation = resolveToStation(delivery.destinationAccessPoint);
+      
+      console.log(`Delivery ${delivery._id}:`, { 
+        originStation, 
+        destStation, 
+        originPos: stationCoords[originStation],
+        destPos: stationCoords[destStation]
+      });
       
       const originPos = stationCoords[originStation];
       const destPos = stationCoords[destStation];
@@ -281,11 +297,11 @@ export default function NewJob() {
     });
 
     return markers;
-  }, [deliveriesToShow, selectedDelivery]);
+  }, [deliveriesToShow, selectedDelivery, mounted]);
 
   // Polylines for all deliveries
   const allPaths = useMemo(() => {
-    if (deliveriesToShow.length === 0) return [];
+    if (!mounted || deliveriesToShow.length === 0) return [];
 
     return deliveriesToShow.map((delivery) => {
       const { path } = calculateRoute(delivery.originAccessPoint, delivery.destinationAccessPoint);
