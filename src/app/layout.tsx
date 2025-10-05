@@ -8,6 +8,7 @@ import "./globals.css";
 import { ProductProvider } from "./contexts/ProductProvider";
 import { CommuterProvider } from "./contexts/CommuterProvider";
 import { ShipperProvider } from "./contexts/ShipperProvider";
+import { AccesspointProvider } from "./contexts/AccesspointProvider";
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
@@ -26,13 +27,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           suppressHydrationWarning
           className={`${geistSans.variable} ${geistMono.variable} antialiased`}
         >
-          <ProductProvider>
-          <CommuterProvider>
-            <ShipperProvider>
-              {children}
-              </ShipperProvider>
-          </CommuterProvider>
-        </ProductProvider>
+          <AccesspointProvider>
+            <ProductProvider>
+              <CommuterProvider>
+                <ShipperProvider>
+                  {children}
+                </ShipperProvider>
+              </CommuterProvider>
+            </ProductProvider>
+          </AccesspointProvider>
       </body>
       </html>
     </ClerkProvider>

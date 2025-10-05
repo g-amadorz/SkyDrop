@@ -1,6 +1,6 @@
 "use client";
 import React, { useEffect, useState, useMemo } from "react";
-import { Box, Button, Typography, Snackbar, Alert } from "@mui/material";
+import { Box, Button, Typography, Snackbar, Alert, TextField, Card, CardContent, CardActions } from "@mui/material";
 import dynamic from "next/dynamic";
 import { useAccesspoint } from "../contexts/AccesspointContext";
 import { stationCoords } from "../compute/CalcHops";
@@ -10,6 +10,12 @@ const MapContainer = dynamic(() => import("react-leaflet").then(mod => mod.MapCo
 const TileLayer = dynamic(() => import("react-leaflet").then(mod => mod.TileLayer), { ssr: false });
 const Marker = dynamic(() => import("react-leaflet").then(mod => mod.Marker), { ssr: false });
 const Circle = dynamic(() => import("react-leaflet").then(mod => mod.Circle), { ssr: false });
+import { useMapEvent } from "react-leaflet";
+// Component to handle map clicks using useMapEvent
+function MapClickHandler({ onClick }) {
+  useMapEvent('click', onClick);
+  return null;
+}
 
 const DEFAULT_RADIUS = 500; // meters
 
@@ -23,8 +29,10 @@ function haversine([lat1, lon1], [lat2, lon2]) {
 }
 
 const NewAccessPointPage = ({ radius = DEFAULT_RADIUS }) => {
-  const { accessPoints } = useAccesspoint();
+  const { accessPoints, create } = useAccesspoint();
   const [pin, setPin] = useState(null); // [lat, lng]
+  const [name, setName] = useState("");
+  const [nameTouched, setNameTouched] = useState(false);
   const [snack, setSnack] = useState(false);
   const [error, setError] = useState("");
 
@@ -62,15 +70,32 @@ const NewAccessPointPage = ({ radius = DEFAULT_RADIUS }) => {
   const handleMapClick = e => {
     setPin([e.latlng.lat, e.latlng.lng]);
     setError("");
+    setName("");
+    setNameTouched(false);
   };
 
   const handleCreate = () => {
+    setNameTouched(true);
     if (!canPlace) {
       setError("Pin must be within radius of a station.");
       return;
     }
+    if (!name || name.length < 2) {
+      setError("Name is required and must be at least 2 characters.");
+      return;
+    }
+    create({
+      numProducts: 0,
+      nearestStation: nearest.name,
+      lat: pin[0],
+      lng: pin[1],
+      name,
+    });
     setSnack(true);
     setPin(null);
+    setName("");
+    setNameTouched(false);
+    setError("");
   };
 
   return (
@@ -82,8 +107,9 @@ const NewAccessPointPage = ({ radius = DEFAULT_RADIUS }) => {
           center={[49.25, -123.1]}
           zoom={12}
           style={{ height: "100%", width: "100%" }}
-          whenCreated={map => map.on("click", handleMapClick)}
         >
+          {/* Attach map click handler */}
+          <MapClickHandler onClick={handleMapClick} />
           <TileLayer
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             attribution="&copy; OpenStreetMap contributors"
@@ -106,16 +132,38 @@ const NewAccessPointPage = ({ radius = DEFAULT_RADIUS }) => {
 
       <Box sx={{ p: 2, display: "flex", flexDirection: "column", alignItems: "center" }}>
         {pin && (
-          <>
-            <Typography variant="body2" color={canPlace ? "success.main" : "error"}>
-              {canPlace
-                ? `Nearest station: ${nearest.name} (${nearest.dist.toFixed(0)}m)`
-                : `Pin must be within ${radius}m of a station. Nearest: ${nearest.name} (${nearest.dist.toFixed(0)}m)`}
-            </Typography>
-            <Button variant="contained" sx={{ mt: 1 }} onClick={handleCreate} disabled={!canPlace}>
-              Create Access Point
-            </Button>
-          </>
+          <Card sx={{ minWidth: 320, mb: 2 }}>
+            <CardContent>
+              <Typography variant="h6">New Access Point</Typography>
+              <Typography variant="body2">
+                Lat: {pin[0].toFixed(5)}, Lng: {pin[1].toFixed(5)}
+              </Typography>
+              <Typography variant="body2">
+                Nearest station: {nearest?.name} ({nearest?.dist?.toFixed(0)}m)
+              </Typography>
+              <TextField
+                label="Name"
+                value={name}
+                onChange={e => setName(e.target.value)}
+                onBlur={() => setNameTouched(true)}
+                error={nameTouched && (!name || name.length < 2)}
+                helperText={nameTouched && (!name || name.length < 2) ? "Name is required (min 2 chars)" : ""}
+                sx={{ mt: 2, mb: 1 }}
+                fullWidth
+              />
+              <Typography variant="body2" color={canPlace ? "success.main" : "error"}>
+                {canPlace
+                  ? "Within allowed radius."
+                  : `Must be within ${radius}m of a station.`}
+              </Typography>
+            </CardContent>
+            <CardActions>
+              <Button onClick={() => { setPin(null); setName(""); setNameTouched(false); setError(""); }}>Cancel</Button>
+              <Button variant="contained" onClick={handleCreate} disabled={!canPlace || !name || name.length < 2}>
+                Confirm
+              </Button>
+            </CardActions>
+          </Card>
         )}
         {error && <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>}
         <Snackbar open={snack} autoHideDuration={3000} onClose={() => setSnack(false)}>
