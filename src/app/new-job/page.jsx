@@ -73,7 +73,6 @@ const NewJob = () => {
 
   // MARKERS
   const markers = useMemo(() => {
-    // If a path is open, only show the origin of that job
     const pickupNames = openJobId
       ? [availableProducts.find(p => p.id === openJobId)?.currApId].filter(Boolean)
       : Array.from(new Set(availableProducts.map(p => p.currApId)));
@@ -85,7 +84,7 @@ const NewJob = () => {
         const { path } = bfsShortestPath(
           skytrainGraph,
           resolveToStation(openJob.currApId),
-          resolveToStation(openJob.destApId)
+          resolveToStation(dropOffSelections[openJob.id] || openJob.destApId)
         );
         if (path.length > 1) pathEndStation = path[path.length - 1];
       }
@@ -105,8 +104,16 @@ const NewJob = () => {
             <Typography variant="subtitle1" fontWeight="bold">{name}</Typography>
             <Box sx={{ maxHeight: 300, overflowY: 'auto', width: 250 }}>
               {relatedJobs.map(job => {
-                const { path } = bfsShortestPath(skytrainGraph, resolveToStation(job.currApId), resolveToStation(job.destApId));
-                const selectedDrop = dropOffSelections[job.id] || job.destApId;
+                const startStation = resolveToStation(job.currApId);
+                const endName = dropOffSelections[job.id] || job.destApId;
+                const endAP = accessPoints.find(ap => ap.name === endName);
+                const endStation = resolveToStation(endName);
+                const { path } = bfsShortestPath(skytrainGraph, startStation, endStation);
+
+                // Dropdown shows actual AP at end if destination is AP
+                const pathForDropdown = [...path];
+                if (endAP && !pathForDropdown.includes(endName)) pathForDropdown.push(endName);
+
                 return (
                   <Card key={job.id} sx={{ my: 1 }}>
                     <CardContent sx={{ p: 1.5 }}>
@@ -116,18 +123,18 @@ const NewJob = () => {
                         </Typography>
                         <Select
                           size="small"
-                          value={selectedDrop}
+                          value={dropOffSelections[job.id] || endName}
                           onChange={e => setDropOffSelections(s => ({ ...s, [job.id]: e.target.value }))}
                           sx={{ mx: 1, minWidth: 120, background: 'white' }}
                           MenuProps={{ PaperProps: { sx: { fontSize: '0.9rem' } } }}
                         >
-                          {path.slice(1).map(station => (
-                            <MenuItem key={station} value={station}>{station}</MenuItem>
+                          {pathForDropdown.slice(1).map(name => (
+                            <MenuItem key={name} value={name}>{name}</MenuItem>
                           ))}
                         </Select>
                       </Box>
                       <Typography variant="body2" sx={{ marginTop: 1 }}>
-                        Hops: {bfsShortestPath(skytrainGraph, resolveToStation(job.currApId), selectedDrop).hops}
+                        Hops: {bfsShortestPath(skytrainGraph, startStation, resolveToStation(dropOffSelections[job.id] || endName)).hops}
                       </Typography>
                     </CardContent>
                     <CardActions>
@@ -170,26 +177,18 @@ const NewJob = () => {
     if (startAP) polylineCoords.push([startAP.lat, startAP.lng]);
     polylineCoords.push(stationCoords[startStation]);
 
-    for (let i = 1; i < path.length - 1; i++) {
-      polylineCoords.push(stationCoords[path[i]]);
-    }
-
+    for (let i = 1; i < path.length - 1; i++) polylineCoords.push(stationCoords[path[i]]);
     polylineCoords.push(stationCoords[endStation]);
     if (endAP) polylineCoords.push([endAP.lat, endAP.lng]);
 
     const markersArr = [];
-
-    // Start pin
     markersArr.push(
       <Marker key="start" position={startAP ? [startAP.lat, startAP.lng] : stationCoords[startStation]} icon={L.icon({ iconUrl: startAP ? '/marker-icon.png' : '/marker-icon.png', iconSize: [25, 41], iconAnchor: [12.5, 41] })} interactive={false} />
     );
-
-    // End pin
     markersArr.push(
       <Marker key="end" position={endAP ? [endAP.lat, endAP.lng] : stationCoords[endStation]} icon={L.icon({ iconUrl: '/red-pin.png', iconSize: [25, 41], iconAnchor: [12.5, 41] })} interactive={false} />
     );
 
-    // Intermediate dots
     for (let i = 1; i < path.length - 1; i++) {
       const s = path[i];
       markersArr.push(
@@ -203,7 +202,6 @@ const NewJob = () => {
     </>;
   };
 
-  // JOB LIST COMPONENTS (desktop and mobile)
   const JobList = (
     <Box sx={{ width: 280, p: 2 }}>
       <Typography variant="h6" sx={{ mb: 2 }}>Available Jobs</Typography>
@@ -249,13 +247,14 @@ const NewJob = () => {
             <MenuIcon />
           </IconButton>
           <Drawer anchor="right" open={drawerOpen} onClose={() => setDrawerOpen(false)}>
-            {JobList}
+            <JobList />
           </Drawer>
         </>
       ) : (
-        <Box sx={{ flexShrink: 0, width: 300, borderRight: "1px solid #ddd", height: "100%", overflowY: "auto", bgcolor: "#fafafa" }}>{JobList}</Box>
+        <Box sx={{ flexShrink: 0, width: 300, borderRight: "1px solid #ddd", height: "100%", overflowY: "auto", bgcolor: "#fafafa" }}>
+          {JobList}
+        </Box>
       )}
-
       <Box sx={{ flexGrow: 1, position: 'relative' }}>
         <MapContainer center={[49.25, -123.1]} zoom={11} scrollWheelZoom={true} style={{ height: "100%", width: "100%" }}>
           <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution="&copy; OpenStreetMap contributors" />
@@ -263,7 +262,6 @@ const NewJob = () => {
           {renderPath()}
         </MapContainer>
       </Box>
-
       <Snackbar open={snack} autoHideDuration={3000} onClose={() => setSnack(false)}>
         <Alert severity="success" sx={{ width: "100%" }}>Job claimed successfully!</Alert>
       </Snackbar>
@@ -272,3 +270,4 @@ const NewJob = () => {
 };
 
 export default NewJob;
+
