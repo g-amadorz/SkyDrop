@@ -73,7 +73,18 @@ const NewJob = () => {
   // Only show pickup (origin) markers for currApId
   const markers = useMemo(() => {
     const pickupStations = Array.from(new Set(availableProducts.map(p => p.currApId)));
+    // If a path is being shown, get its end station
+    let pathEndStation = null;
+    if (openJobId) {
+      const openJob = availableProducts.find(j => j.id === openJobId);
+      if (openJob) {
+        const { path } = bfsShortestPath(skytrainGraph, openJob.currApId, openJob.destApId);
+        if (path && path.length > 1) pathEndStation = path[path.length - 1];
+      }
+    }
     return pickupStations.map(name => {
+      // Suppress blue marker if this is the end of the shown path
+      if (name === pathEndStation) return null;
       const [lat, lng] = stationCoords[name];
       const relatedJobs = availableProducts.filter(p => p.currApId === name);
       return (
