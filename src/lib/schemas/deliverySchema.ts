@@ -18,9 +18,6 @@ export const initiateDeliverySchema = z.object({
   shipperId: z.string(),
   originAccessPoint: z.string(),
   destinationAccessPoint: z.string(),
-  estimatedDistance: z.number().min(0),
-  totalCost: z.number().min(0),
-  recipientVerificationCode: z.string().min(4).max(8),
 });
 
 // Schema for claiming a package (commuter picks up)
@@ -35,13 +32,11 @@ export const dropoffPackageSchema = z.object({
   deliveryId: z.string(),
   commuterId: z.string(),
   accessPointId: z.string(),
-  distance: z.number().min(0),
 });
 
 // Schema for recipient pickup
 export const recipientPickupSchema = z.object({
   deliveryId: z.string(),
-  verificationCode: z.string().min(4).max(8),
   recipientPhone: z.string().optional(),
   recipientName: z.string().optional(),
 });
