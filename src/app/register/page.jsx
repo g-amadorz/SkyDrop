@@ -72,7 +72,6 @@ const RegisterPage = () => {
       <TextField label="Email" name="email" value={form.email} onChange={handleChange} required type="email" />
       <TextField label="Phone Number" name="pn" value={form.pn} onChange={handleChange} required />
       <TextField label="Address" name="address" value={form.address} onChange={handleChange} required />
-      <TextField label="Product ID (optional)" name="productId" value={form.productId} onChange={handleChange} />
       <TextField
         select
         label="Role"

@@ -18,7 +18,7 @@ export const ShipperProvider = ({ children }) => {
         setShippers(prevShippers => {
             const newShipper = {
                 id: prevShippers.length === 0 ? 0 : Math.max(...prevShippers.map(s => s.id ?? 0)) + 1,
-                productId,
+                productId: productId ?? null,
                 name,
                 email,
                 pn,
