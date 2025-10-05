@@ -5,22 +5,28 @@ import {
   TextField,
   Button,
   Typography,
+  Drawer,
+  IconButton,
   List,
   ListItem,
   ListItemText,
   Snackbar,
-  Alert
+  Alert,
+  Card,
+  CardContent,
+  CardActions
 } from "@mui/material";
+import MenuIcon from "@mui/icons-material/Menu";
 import { useProduct } from "../contexts/ProductContext";
 import dynamic from "next/dynamic";
-
+import useMediaQuery from "@mui/material/useMediaQuery";
 import "leaflet/dist/leaflet.css";
 
-// Dynamically import Leaflet components (no SSR)
+// Dynamically import Leaflet (no SSR)
 const MapContainer = dynamic(() => import("react-leaflet").then(mod => mod.MapContainer), { ssr: false });
 const TileLayer = dynamic(() => import("react-leaflet").then(mod => mod.TileLayer), { ssr: false });
 const Marker = dynamic(() => import("react-leaflet").then(mod => mod.Marker), { ssr: false });
-const Polyline = dynamic(() => import("react-leaflet").then(mod => mod.Polyline), { ssr: false });
+const Popup = dynamic(() => import("react-leaflet").then(mod => mod.Popup), { ssr: false });
 
 import { stationCoords } from "../compute/CalcHops";
 
@@ -42,6 +48,9 @@ const NewJob = () => {
   const [phone, setPhone] = useState("");
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [snack, setSnack] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
+  const isMobile = useMediaQuery("(max-width:900px)");
 
   // Only show products with no commuterPN
   const availableProducts = products.filter(p => !p.commuterPN);
@@ -57,23 +66,53 @@ const NewJob = () => {
     }
   };
 
-  // Memoize station markers to prevent rerender flicker
-  const markers = useMemo(
-    () =>
-      Object.entries(stationCoords).map(([name, [lat, lng]]) => (
-        <Marker key={name} position={[lat, lng]} />
-      )),
-    []
-  );
+  // Only include coordinates that exist in available jobs
+  const markers = useMemo(() => {
+    const jobStations = new Set();
+    availableProducts.forEach(p => {
+      if (stationCoords[p.currApId]) jobStations.add(p.currApId);
+      if (stationCoords[p.destApId]) jobStations.add(p.destApId);
+    });
 
-  // Coordinates for selected route
-  const selectedJob = availableProducts.find(p => p.id === selectedProduct);
-  const fromCoords = selectedJob ? stationCoords[selectedJob.currApId] : null;
-  const toCoords = selectedJob ? stationCoords[selectedJob.destApId] : null;
+    return Array.from(jobStations).map(name => {
+      const [lat, lng] = stationCoords[name];
+      const relatedJobs = availableProducts.filter(
+        p => p.currApId === name || p.destApId === name
+      );
+      return (
+        <Marker key={name} position={[lat, lng]}>
+          <Popup>
+            <Typography variant="subtitle1" fontWeight="bold">{name}</Typography>
+            {relatedJobs.map(job => (
+              <Card key={job.id} sx={{ my: 1 }}>
+                <CardContent>
+                  <Typography variant="body2">
+                    From <b>{job.currApId}</b> → <b>{job.destApId}</b><br />
+                    Hops: {job.price}
+                  </Typography>
+                </CardContent>
+                <CardActions>
+                  <Button
+                    size="small"
+                    variant="contained"
+                    onClick={() => handleClaim(job.id)}
+                    disabled={selectedProduct === job.id || !isValidPhone}
+                  >
+                    {selectedProduct === job.id ? "Claimed" : "Claim"}
+                  </Button>
+                </CardActions>
+              </Card>
+            ))}
+          </Popup>
+        </Marker>
+      );
+    });
+  }, [availableProducts, selectedProduct, phone]);
 
-  return (
-    <Box sx={{ maxWidth: 800, mx: "auto", mt: 4 }}>
-      <Typography variant="h5" gutterBottom>
+  // Job list component
+  const JobList = (
+    <Box sx={{ width: 280, p: 2 }}>
+      <Typography variant="h6" sx={{ mb: 2 }}>
         Available Jobs
       </Typography>
 
@@ -81,47 +120,62 @@ const NewJob = () => {
         label="Your Phone Number"
         value={phone}
         onChange={(e) => setPhone(e.target.value)}
-        sx={{ mb: 2 }}
         fullWidth
         placeholder="e.g. 6041234567"
         error={phone.length > 0 && !isValidPhone}
         helperText={!isValidPhone && phone.length > 0 ? "Enter a valid 10-digit phone number" : ""}
+        sx={{ mb: 2 }}
       />
 
-      <List sx={{ mb: 4 }}>
+      <List>
         {availableProducts.map((product) => (
           <ListItem key={product.id} divider>
             <ListItemText
-              primary={`From: ${product.currApId} → ${product.destApId} | Hops: ${product.price}`}
-              secondary={selectedProduct === product.id ? "Claimed!" : null}
+              primary={`From: ${product.currApId} → ${product.destApId}`}
+              secondary={`Hops: ${product.price}`}
             />
-            <Button
-              variant="contained"
-              color="primary"
-              disabled={selectedProduct === product.id || !isValidPhone}
-              onClick={() => handleClaim(product.id)}
-            >
-              {selectedProduct === product.id ? "Claimed" : "Claim"}
-            </Button>
           </ListItem>
         ))}
       </List>
+    </Box>
+  );
 
-      {/* Stable non-reloading map */}
-      <Box
-        sx={{
-          height: 400,
-          width: "100%",
-          mb: 2,
-          borderRadius: 2,
-          overflow: "hidden",
-          boxShadow: 2
-        }}
-      >
+  return (
+    <Box sx={{ display: "flex", flexDirection: isMobile ? "column" : "row", height: "100vh" }}>
+      {/* Sidebar or Hamburger */}
+      {isMobile ? (
+        <>
+          <IconButton
+            onClick={() => setDrawerOpen(true)}
+            sx={{ position: "absolute", top: 10, left: 10, zIndex: 1000, bgcolor: "white" }}
+          >
+            <MenuIcon />
+          </IconButton>
+          <Drawer anchor="left" open={drawerOpen} onClose={() => setDrawerOpen(false)}>
+            {JobList}
+          </Drawer>
+        </>
+      ) : (
+        <Box
+          sx={{
+            flexShrink: 0,
+            width: 300,
+            borderRight: "1px solid #ddd",
+            height: "100%",
+            overflowY: "auto",
+            bgcolor: "#fafafa"
+          }}
+        >
+          {JobList}
+        </Box>
+      )}
+
+      {/* Map Section */}
+      <Box sx={{ flexGrow: 1 }}>
         <MapContainer
           center={[49.25, -123.1]}
           zoom={11}
-          scrollWheelZoom={false}
+          scrollWheelZoom={true}
           style={{ height: "100%", width: "100%" }}
         >
           <TileLayer
@@ -129,14 +183,10 @@ const NewJob = () => {
             attribution="&copy; OpenStreetMap contributors"
           />
           {markers}
-
-          {/* Draw line between job points if claimed */}
-          {fromCoords && toCoords && (
-            <Polyline positions={[fromCoords, toCoords]} pathOptions={{ color: "blue", weight: 4 }} />
-          )}
         </MapContainer>
       </Box>
 
+      {/* Snackbar */}
       <Snackbar open={snack} autoHideDuration={3000} onClose={() => setSnack(false)}>
         <Alert severity="success" sx={{ width: "100%" }}>
           Job claimed successfully!
