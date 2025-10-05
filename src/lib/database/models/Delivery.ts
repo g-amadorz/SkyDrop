@@ -15,16 +15,25 @@ export interface IDelivery extends Document {
   productId: mongoose.Types.ObjectId;
   shipperId: mongoose.Types.ObjectId;
   currentCommuterId?: mongoose.Types.ObjectId;
+
   originAccessPoint: mongoose.Types.ObjectId;
   destinationAccessPoint: mongoose.Types.ObjectId;
   currentAccessPoint: mongoose.Types.ObjectId;
+
+  // NEW: progress-based payout fields
+  plannedPath: mongoose.Types.ObjectId[]; // ordered AP ids, inclusive [origin...destination]
+  progress: number;                       // 0..1
+  awardedPoints: number;                  // how much paid out so far
+
   status: 'awaiting-pickup' | 'in-transit' | 'ready-for-recipient';
   legs: IDeliveryLeg[];
+
   totalCost: number;
   paidAmount: number;
-  reservedAmount: number;
+  reservedAmount: number; // use as "base points / payout pool"
   estimatedDistance: number;
   actualDistance: number;
+
   recipientVerificationCode: string;
   createdAt: Date;
   updatedAt: Date;
@@ -67,7 +76,7 @@ const DeliveryLegSchema = new Schema<IDeliveryLeg>({
   },
   status: {
     type: String,
-    enum: ['awaiting-pickup','in-progress', 'completed'],
+    enum: ['in-progress', 'completed'], // tightened
     default: 'in-progress',
   },
 });
@@ -103,6 +112,31 @@ const DeliverySchema: Schema<IDelivery> = new Schema(
       ref: 'AccessPoint',
       required: [true, 'Current access point is required'],
     },
+
+    // NEW: route + progress
+    plannedPath: {
+      type: [Schema.Types.ObjectId],
+      ref: 'AccessPoint',
+      required: [true, 'Planned path is required'],
+      validate: {
+        validator(arr: mongoose.Types.ObjectId[]) {
+          return Array.isArray(arr) && arr.length >= 2;
+        },
+        message: 'Planned path must include at least origin and destination',
+      },
+    },
+    progress: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 1,
+    },
+    awardedPoints: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+
     status: {
       type: String,
       enum: ['awaiting-pickup', 'in-transit', 'ready-for-recipient'],
@@ -142,16 +176,16 @@ const DeliverySchema: Schema<IDelivery> = new Schema(
       type: Date,
     },
   },
-  {
-    timestamps: true,
-  }
+  { timestamps: true }
 );
 
 DeliverySchema.index({ status: 1, currentAccessPoint: 1 });
 DeliverySchema.index({ shipperId: 1, status: 1 });
 DeliverySchema.index({ currentCommuterId: 1, status: 1 });
 DeliverySchema.index({ productId: 1 });
+DeliverySchema.index({ destinationAccessPoint: 1 });
 
-const Delivery: Model<IDelivery> = mongoose.models.Delivery || mongoose.model<IDelivery>('Delivery', DeliverySchema);
+const Delivery: Model<IDelivery> =
+  mongoose.models.Delivery || mongoose.model<IDelivery>('Delivery', DeliverySchema);
 
 export default Delivery;

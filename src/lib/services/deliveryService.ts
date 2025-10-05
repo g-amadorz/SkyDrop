@@ -1,244 +1,207 @@
+// src/lib/services/deliveryService.ts
+import { Types } from "mongoose";
 import { DeliveryRepository } from "@/lib/database/repository/deliveryRepository";
 import { UserService } from "@/lib/services/userService";
 import { ProductService } from "@/lib/services/productService";
 import { AccessPointService } from "@/lib/services/accessPointService";
 import { InitiateDeliveryInput } from "../schemas/deliverySchema";
+import { calcProgress, calcPayoutDelta, DenominatorMode } from "./progressService";
 
 export default class DeliveryService {
-    private deliveryRepository: DeliveryRepository;
-    private userService: UserService;
-    private productService: ProductService;
-    private accessPointService: AccessPointService;
+  private deliveryRepository: DeliveryRepository;
+  private userService: UserService;
+  private productService: ProductService;
+  private accessPointService: AccessPointService;
 
-    constructor() {
-        this.deliveryRepository = new DeliveryRepository();
-        this.userService = new UserService();
-        this.productService = new ProductService();
-        this.accessPointService = new AccessPointService();
+  constructor() {
+    this.deliveryRepository = new DeliveryRepository();
+    this.userService = new UserService();
+    this.productService = new ProductService();
+    this.accessPointService = new AccessPointService();
+  }
+
+  // Small helpers to keep casting/guards local
+  private asOid(v: any, fieldName: string): Types.ObjectId {
+    // Works for both string and Types.ObjectId-like inputs
+    if (v instanceof Types.ObjectId) return v;
+    if (typeof v === "string") return new Types.ObjectId(v);
+    // Try to unwrap documents `{ _id }`
+    if (v && typeof v === "object" && v._id) {
+      const id = (v._id as any);
+      if (id instanceof Types.ObjectId) return id;
+      if (typeof id === "string") return new Types.ObjectId(id);
+    }
+    throw new Error(`Invalid ObjectId for ${fieldName}`);
+  }
+
+  private ensure<T>(val: T | null | undefined, name: string): T {
+    if (val === null || val === undefined) throw new Error(`${name} not found`);
+    return val;
+  }
+
+  // 1) INITIATION (Shipper creates delivery)
+  async initiateDelivery(shipperId: string, deliveryData: InitiateDeliveryInput) {
+    const shipper = this.ensure(await this.userService.findUserById(shipperId), "Shipper");
+    if ((shipper as any).role !== "sender") throw new Error("User must have sender role");
+
+    this.ensure(await this.productService.findProductById(deliveryData.productId), "Product");
+
+    // Create with exactly the fields InitiateDeliveryInput allows (no extra keys)
+    const created = this.ensure(
+      await this.deliveryRepository.createDelivery({
+        ...deliveryData,
+      } as any),
+      "DeliveryCreate"
+    );
+
+    // Follow-up update to set currentAccessPoint to origin without changing your DTO/schema
+    const updated = this.ensure(
+      await this.deliveryRepository.updateDelivery((created as any)._id, {
+        currentAccessPoint: this.asOid((created as any).originAccessPoint, "originAccessPoint"),
+        status: "awaiting-pickup",
+        legs: [],
+        progress: 0,
+        awardedPoints: 0,
+        paidAmount: (created as any).paidAmount ?? 0,
+        actualDistance: (created as any).actualDistance ?? 0,
+      } as any),
+      "DeliveryInitUpdate"
+    );
+
+    return updated;
+  }
+
+  // 2) CLAIMING (Commuter picks up package)
+  async claimPackage(commuterId: string, deliveryId: string) {
+    const commuter = this.ensure(await this.userService.findUserById(commuterId), "Commuter");
+    const delivery = this.ensure(await this.deliveryRepository.findDeliveryById(deliveryId), "Delivery");
+
+    if (delivery.status !== "awaiting-pickup") {
+      throw new Error("Delivery must be in awaiting-pickup status");
+    }
+    if (delivery.currentCommuterId) {
+      throw new Error("Delivery already has a commuter");
     }
 
-    // 1. INITIATION (Shipper creates delivery)
-    async initiateDelivery(shipperId: string, deliveryData: InitiateDeliveryInput) {
-        // - Verify shipper exists and has 'sender' role // Done
-        // - Check shipper has sufficient points // Done
-        // - Calculate estimated cost // Done
-        // - Reserve funds from shipper's wallet // Done
-        // - Create delivery record // Done
-        // - Update product status to 'awaiting-pickup' // Done
-        // - Generate recipient verification code
-        // - Return delivery with tracking info // Done
-        
-        const shipper = await this.userService.findUserById(shipperId);
-        if (!shipper) {
-            throw new Error('Shipper not found');
-        }
+    const newLeg = {
+      commuterId: this.asOid((commuter as any)._id, "commuter._id"),
+      fromAccessPoint: this.asOid((delivery as any).currentAccessPoint, "delivery.currentAccessPoint"),
+      toAccessPoint: this.asOid((delivery as any).destinationAccessPoint, "delivery.destinationAccessPoint"),
+      pickupTime: new Date(),
+      distance: 0,
+      earnings: 0,
+      status: "in-progress" as const,
+    };
 
-        if (shipper.role !== 'sender') {
-            throw new Error('User must have sender role');
-        }
+    const updated = this.ensure(
+      await this.deliveryRepository.updateDelivery((delivery as any)._id, {
+        status: "in-transit",
+        currentCommuterId: this.asOid((commuter as any)._id, "commuter._id"),
+        legs: [...(delivery.legs ?? []), newLeg],
+      } as any),
+      "DeliveryClaimUpdate"
+    );
 
-        const product = await this.productService.findProductById(deliveryData.productId);
-        if (!product) {
-            throw new Error('Product not found');
-        }
+    return updated;
+  }
 
-        const delivery = await this.deliveryRepository.createDelivery(deliveryData);
-        return delivery;
+  // 3) DROPOFF (Commuter drops at intermediate or final destination)
+  async dropoffPackage(
+    commuterId: string,
+    deliveryId: string,
+    accessPointId: string,
+    denominatorMode: DenominatorMode = "nodes" // "nodes" → 4/5 + 1/5; use "hops" for 3/4 + 1/4
+  ) {
+    const commuter = this.ensure(await this.userService.findUserById(commuterId), "Commuter");
+    const currentAP = this.ensure(await this.accessPointService.findAccessPointById(accessPointId), "AccessPoint");
+    const delivery = this.ensure(await this.deliveryRepository.findDeliveryById(deliveryId), "Delivery");
+
+    const currentCommuterId = delivery.currentCommuterId ? delivery.currentCommuterId.toString() : null;
+    if (!currentCommuterId || currentCommuterId !== (commuter as any)._id.toString()) {
+      throw new Error("You are not assigned to this delivery");
     }
 
-    // 2. CLAIMING (Commuter picks up package)
-    async claimPackage(commuterId: string, deliveryId: string) {
-        // - Assign commuter to delivery
-        // - Create new delivery leg
-        // - Update product status to 'in-transit'
-        // - Add product to commuter's activeProductIds
+    // 1) Compute progress on planned path (idempotent payout via delta)
+    const pathStr = (delivery.plannedPath as any[]).map((id) => this.asOid(id, "plannedPath[]").toString());
+    const originStr = this.asOid((delivery as any).originAccessPoint, "originAccessPoint").toString();
+    const destStr = this.asOid((delivery as any).destinationAccessPoint, "destinationAccessPoint").toString();
+    const atStr = this.asOid((currentAP as any)._id, "currentAP._id").toString();
 
-        const commuter = await this.userService.findUserById(commuterId);
-        if (!commuter) {
-            throw new Error('Commuter not found');
-        }
+    const { progress: newProgress } = calcProgress(pathStr, originStr, destStr, atStr, denominatorMode);
+    const prevProgress = delivery.progress ?? 0;
 
-        const delivery = await this.deliveryRepository.findDeliveryById(deliveryId);
+    // Reconstruct original base: awardedSoFar + remainingReserve
+    const originalBase = (delivery.awardedPoints ?? 0) + (delivery.reservedAmount ?? 0);
 
-        if (!delivery) {
-            throw new Error('Delivery not found');
-        }
+    const grossPayoutThisDrop = calcPayoutDelta(originalBase, prevProgress, newProgress);
+    const PLATFORM_FEE = 0.10;
+    const commuterNet = Math.max(0, grossPayoutThisDrop * (1 - PLATFORM_FEE));
 
-        if (delivery.status !== 'awaiting-pickup') {
-            throw new Error('Delivery must be in awaiting-pickup status');
-        }
+    // 2) Close the active leg
+    const legs = [...(delivery.legs ?? [])];
+    const last = legs[legs.length - 1];
+    if (!last || last.status !== "in-progress") throw new Error("No active leg to close");
 
-        if (delivery.currentCommuterId) {
-            throw new Error('Delivery already has a commuter');
-        }
+    last.toAccessPoint = this.asOid((currentAP as any)._id, "currentAP._id");
+    last.dropoffTime = new Date();
+    last.status = "completed";
+    last.earnings = commuterNet;
 
-        const newLeg = {
-            commuterId: commuter._id,
-            fromAccessPoint: delivery.currentAccessPoint,
-            toAccessPoint: delivery.destinationAccessPoint, // Will be updated on dropoff
-            pickupTime: new Date(),
-            distance: 0, // Will be calculated on dropoff
-            earnings: 0, // Will be calculated on dropoff
-            status: 'in-progress' as const,
-        };
+    // 3) Update delivery document
+    const isFinal = atStr === destStr;
 
-        const updatedDelivery = await this.deliveryRepository.updateDelivery(deliveryId, {
-            status: 'in-transit',
-            currentCommuterId: commuter._id,
-            legs: [...delivery.legs, newLeg],
-        });
+    const updated = this.ensure(
+      await this.deliveryRepository.updateDelivery((delivery as any)._id, {
+        status: isFinal ? "ready-for-recipient" : "awaiting-pickup",
+        currentCommuterId: undefined, // clear commuter (must be undefined, not null, for type)
+        currentAccessPoint: this.asOid((currentAP as any)._id, "currentAP._id"),
+        legs,
+        progress: newProgress,
+        awardedPoints: (delivery.awardedPoints ?? 0) + grossPayoutThisDrop,
+        reservedAmount: Math.max(0, (delivery.reservedAmount ?? 0) - grossPayoutThisDrop),
+      } as any),
+      "DeliveryDropUpdate"
+    );
 
-        return updatedDelivery;
-    }
+    // NOTE: We are NOT calling userService.creditCommuter / debitShipperReserve here
+    // to avoid coupling & missing methods. Instead, return amounts to the caller.
+    return {
+      delivery: updated,
+      awardedNowGross: grossPayoutThisDrop,
+      commuterNet,
+      progress: newProgress,
+      status: updated.status,
+    };
+  }
 
-    // 3. DROPOFF (Commuter drops at intermediate or final destination)
-    async dropoffPackage(commuterId: string, deliveryId: string, accessPointId: string) {
-        // - Verify commuter owns this delivery
-        // - Verify commuter is at the access point
-        // - Calculate leg distance and earnings
-        // - Complete current delivery leg
-        // - Deduct earnings from shipper's reserved amount
-        // - Pay commuter
-        // - Check if this is final destination:
-        //   - If YES: Update status to 'ready-for-recipient'
-        //   - If NO: Update status to 'awaiting-pickup', clear commuter
-        // - Update product currentLocation
-        // - Remove from commuter's activeProductIds
-        
-        const commuter = await this.userService.findUserById(commuterId);
-        if (!commuter) {
-            throw new Error('Commuter not found');
-        }
-        
-        const currentAccessPoint = await this.accessPointService.findAccessPointById(accessPointId);
-        if (!currentAccessPoint) {
-            throw new Error('Access point not found');
-        }
+  // 4) RECIPIENT PICKUP (Recipient claims package)
+  async recipientPickup(deliveryId: string, verificationCode: string, _recipientInfo: any) {
+    const delivery = this.ensure(await this.deliveryRepository.findDeliveryById(deliveryId), "Delivery");
+    if (delivery.status !== "ready-for-recipient") throw new Error("Delivery not ready for recipient");
+    if (verificationCode !== delivery.recipientVerificationCode) throw new Error("Invalid verification code");
 
-        const delivery = await this.deliveryRepository.findDeliveryById(deliveryId);
-        if (!delivery) {
-            throw new Error('Delivery not found');
-        }
+    // If you introduce a "completed" status, set it here; for now we keep "ready-for-recipient"
+    const completed = this.ensure(
+      await this.deliveryRepository.updateDelivery((delivery as any)._id, {
+        completedAt: new Date(),
+      } as any),
+      "DeliveryCompleteUpdate"
+    );
 
-        if (delivery.destinationAccessPoint !== currentAccessPoint._id) {
-            const updatedDelivery = await this.deliveryRepository.updateDelivery(deliveryId, {
-                status: 'awaiting-pickup',
-                currentCommuterId: null,
-            });
-        } else {
-            const updatedDelivery = await this.deliveryRepository.updateDelivery(deliveryId, {
-                status: 'ready-for-recipient',
-                currentCommuterId: null,
-            });
-        }
+    return completed;
+  }
 
-
-        const earnings = this.calculateLegEarnings(delivery.legs[delivery.legs.length - 1].distance, delivery.legs[delivery.legs.length - 1].distance, delivery.legs[delivery.legs.length - 1].earnings);
-
-        
-    
-    
-    
-    }
-
-    // 4. RECIPIENT PICKUP (Recipient claims package)
-    async recipientPickup(deliveryId: string, verificationCode: string, recipientInfo: any) {
-        // - Verify delivery exists
-        // - Verify status is 'ready-for-recipient'
-        // - Verify verification code matches
-        // - Verify recipient details match
-        // - Update delivery status to 'completed'
-        // - Update product status to 'delivered'
-        // - Set completedAt timestamp
-        // - Release any unused reserved funds back to shipper
-    }
-
-    // // 5. QUERY OPERATIONS
-    // async getAvailablePackages(filters: GetAvailablePackagesInput) {
-    //     // - Query deliveries with status 'awaiting-pickup'
-    //     // - Filter by access point location
-    //     // - Filter by destination direction
-    //     // - Filter by minimum earnings
-    //     // - Filter by max distance from commuter
-    //     // - Return sorted by earnings (highest first)
-    // }
-
-    async getDeliveryById(id: string) {
-        // - Find delivery by ID
-        // - Populate shipper, commuter, product, access points
-        // - Return full delivery details
-    }
-
-    async getDeliveryByProductId(productId: string) {
-        // - Find delivery by product ID
-        // - Return delivery details
-    }
-
-    async getShipperDeliveries(shipperId: string, status?: string) {
-        // - Find all deliveries for a shipper
-        // - Optional filter by status
-        // - Return list with pagination
-    }
-
-    async getCommuterActiveDeliveries(commuterId: string) {
-        // - Find all deliveries where currentCommuterId matches
-        // - Filter by status 'in-transit'
-        // - Return active deliveries with route info
-    }
-
-    // 6. PRICING & CALCULATION
-    async calculateDeliveryCost(originId: string, destinationId: string, weight: number, priority: string) {
-        // - Get origin and destination coordinates
-        // - Calculate distance using Haversine formula
-        // - Apply pricing formula:
-        //   baseCost = (distance * RATE_PER_KM) + (weight * RATE_PER_KG)
-        //   totalCost = baseCost * priorityMultiplier * demandMultiplier
-        // - Return estimated cost
-    }
-
-    private calculateLegEarnings(legDistance: number, totalDistance: number, totalCost: number) {
-        // - Calculate percentage of journey completed
-        // - Apply platform fee (10%)
-        // - Return earnings for this leg
-        
-    
-    
-    }
-
-    // 7. VALIDATION & HELPERS
-    async validateShipperBalance(shipperId: string, requiredAmount: number) {
-        // - Get shipper's current points
-        // - Check if sufficient
-        // - Throw InsufficientFundsError if not
-    }
-
-    async validateCommuterCapacity(commuterId: string) {
-        // - Get commuter's active deliveries count
-        // - Check against max capacity
-        // - Throw CapacityExceededError if exceeded
-    }
-
-    async validateLocation(userId: string, requiredAccessPointId: string) {
-        // - Get user's current location (from request or GPS)
-        // - Get access point location
-        // - Calculate distance
-        // - Throw LocationMismatchError if too far
-    }
-
-    // private generateVerificationCode(): string {
-    //     // - Generate 6-digit random code
-    //     // - Return code
-    // }
-
-    // 9. TRACKING & HISTORY
-    async getDeliveryHistory(deliveryId: string) {
-        // - Get all delivery legs
-        // - Return timeline of pickup/dropoff events
-        // - Include commuters, locations, timestamps
-    }
-
-    async trackDelivery(trackingNumber: string) {
-        // - Find delivery by tracking number
-        // - Return current status, location, estimated arrival
-    }
+  // Queries (unchanged stubs)
+  async getDeliveryById(id: string) {
+    return this.deliveryRepository.findDeliveryById(id);
+  }
+  async getDeliveryByProductId(productId: string) {
+    return (this.deliveryRepository as any).findByProductId(productId);
+  }
+  async getShipperDeliveries(shipperId: string, status?: string) {
+    return (this.deliveryRepository as any).findByShipper(shipperId, status);
+  }
+  async getCommuterActiveDeliveries(commuterId: string) {
+    return (this.deliveryRepository as any).findActiveByCommuter(commuterId);
+  }
 }

@@ -5,7 +5,8 @@ export interface IUser extends Document {
   password: string;
   name: string;
   role: 'rider' | 'sender' | 'admin';
-  points: number;
+  points: number;           // available/spendable points
+  reservedPoints: number;   // points locked for deliveries/payouts
   createdAt: Date;
   updatedAt: Date;
 }
@@ -44,12 +45,19 @@ const UserSchema: Schema<IUser> = new Schema(
       default: 0,
       min: [0, 'Points cannot be negative'],
     },
+    // ✅ NEW: reserve pool used by delivery payouts
+    reservedPoints: {
+      type: Number,
+      default: 0,
+      min: [0, 'Reserved points cannot be negative'],
+    },
   },
   {
     timestamps: true,
   }
 );
 
-const User: Model<IUser> = mongoose.models.User || mongoose.model<IUser>('User', UserSchema);
+const User: Model<IUser> =
+  mongoose.models.User || mongoose.model<IUser>('User', UserSchema);
 
 export default User;
