@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Outfit } from "next/font/google";
+import ShipperSection from "./ShipperSection";
 
 const outfit = Outfit({
   subsets: ["latin"],
@@ -22,12 +23,10 @@ export default function Dashboard() {
 
   const currentRole = roles.find((r) => r.id === activeRole)!;
 
-  // Hide/show on scroll
   useEffect(() => {
     const handleScroll = () => {
       const currentY = window.scrollY;
-      if (currentY > lastScrollY && currentY > 80) setShowRoleBar(false);
-      else setShowRoleBar(true);
+      setShowRoleBar(currentY <= lastScrollY || currentY < 80);
       setLastScrollY(currentY);
     };
     window.addEventListener("scroll", handleScroll);
@@ -38,22 +37,20 @@ export default function Dashboard() {
     <div
       className={`${outfit.className} flex flex-col items-center text-center bg-white min-h-screen`}
     >
-      {/* --- Main Navbar --- */}
+      {/* --- Header --- */}
       <header className="fixed top-0 left-0 right-0 bg-white shadow-sm flex justify-between items-center px-6 py-4 z-30">
         <h1 className="text-2xl font-extrabold text-blue-600">
           Sky<span className="text-gray-900">Drop</span>
         </h1>
-        <button className="text-gray-700 font-medium hover:underline">
-          Profile
-        </button>
       </header>
 
-      {/* --- Roles Nav Bar --- */}
+      {/* --- Role Tabs --- */}
       <motion.div
         initial={{ y: 0 }}
         animate={{ y: showRoleBar ? 0 : -80 }}
         transition={{ duration: 0.3, ease: "easeInOut" }}
-        className="fixed top-[64px] left-0 right-0 backdrop-blur-md bg-white/80 border-b border-gray-200/20 flex justify-center gap-12 py-2 z-20"
+        className="fixed top-[64px] left-0 right-0 backdrop-blur-md bg-white/80 border-b border-transparent flex justify-center gap-12 py-2 z-20 mt-5"
+
       >
         {roles.map((role) => (
           <button
@@ -74,7 +71,7 @@ export default function Dashboard() {
             {activeRole === role.id && (
               <motion.div
                 layoutId="underline"
-                className={`absolute bottom-0 left-0 right-0 h-[3px] rounded-full ${
+                className={`absolute bottom-0 left-0 right-0 h-[3px] ${
                   role.color === "blue"
                     ? "bg-blue-500"
                     : role.color === "orange"
@@ -87,8 +84,8 @@ export default function Dashboard() {
         ))}
       </motion.div>
 
-      {/* --- Main Content --- */}
-      <main className="pt-[140px] pb-20 w-full flex flex-col items-center px-6">
+      {/* --- Page Content --- */}
+      <main className="pt-[140px] pb-20 w-full flex justify-center">
         <AnimatePresence mode="wait">
           <motion.div
             key={activeRole}
@@ -96,37 +93,19 @@ export default function Dashboard() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
             transition={{ duration: 0.3 }}
-            className="max-w-md text-center"
+            className="w-full flex justify-center"
           >
-            <h2
-              className={`text-3xl font-bold mb-4 ${
-                currentRole.color === "blue"
-                  ? "text-blue-600"
-                  : currentRole.color === "orange"
-                  ? "text-orange-500"
-                  : "text-gray-900"
-              }`}
-            >
-              {currentRole.title}
-            </h2>
-            <p className="text-gray-700 mb-6">
-              {activeRole === "shipper"
-                ? "Manage your shipments efficiently and track deliveries in real time."
-                : activeRole === "commuter"
-                ? "Deliver packages along your daily routes and earn rewards with SkyDrop."
-                : "Host deliveries at your location and become part of the SkyDrop network."}
-            </p>
-            <button
-              className={`px-6 py-3 rounded-full font-semibold text-white ${
-                currentRole.color === "blue"
-                  ? "bg-blue-500 hover:bg-blue-600"
-                  : currentRole.color === "orange"
-                  ? "bg-orange-500 hover:bg-orange-600"
-                  : "bg-gray-900 hover:bg-black"
-              }`}
-            >
-              Manage
-            </button>
+            {activeRole === "shipper" ? (
+              <ShipperSection />
+            ) : activeRole === "commuter" ? (
+              <p className="text-gray-700 mt-20">
+                Commuter dashboard coming soon 🚴‍♂️
+              </p>
+            ) : (
+              <p className="text-gray-700 mt-20">
+                Access Point dashboard coming soon 🏪
+              </p>
+            )}
           </motion.div>
         </AnimatePresence>
       </main>
