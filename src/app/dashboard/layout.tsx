@@ -4,6 +4,8 @@ import Link from "next/link";
 import { Outfit } from "next/font/google";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
+import { User } from "lucide-react";
+
 
 const outfit = Outfit({
   subsets: ["latin"],
@@ -39,12 +41,13 @@ export default function DashboardLayout({
 
           {/* Right section (profile placeholder) */}
           <div className="flex items-center gap-4">
-            <Link
-              href="/dashboard/profile"
-              className="text-gray-700 hover:text-blue-600 font-medium transition"
-            >
-              Profile
-            </Link>
+          <Link
+            href="/dashboard/profile"
+            className="p-2 rounded-full hover:bg-gray-100 transition"
+          >
+            <User className="w-7 h-7 text-gray-700" />
+          </Link>
+
           </div>
         </div>
       </motion.nav>
