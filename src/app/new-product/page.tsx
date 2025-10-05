@@ -52,7 +52,6 @@ const Page = () => {
   };
 
   const handleApprove = () => {
-    // TODO: Replace with real productId from product selection if needed
     const productId = "mock-product-id";
     const shipperId = user?.id;
     if (!shipperId) {
@@ -60,16 +59,6 @@ const Page = () => {
       return;
     }
     const { hops } = calculateCost();
-    
-    console.log('handleApprove form state:', form);
-    console.log('Creating delivery with:', {
-      productId,
-      shipperId,
-      currApId: form.currApId,
-      destApId: form.destApId,
-      price: hops,
-      name: form.name
-    });
     
     create({
       productId,

@@ -22,10 +22,22 @@ export class UserRepository {
     }
 
     async updateUser(id: string, userData: updateAccountInput): Promise<IUser | null> {
-        return await User.findByIdAndUpdate(id, userData, {
-            new: true,
-            runValidators: true,
-        }).select('-password');
+        // Try to update by MongoDB _id, fallback to clerkId
+        if (/^[a-fA-F0-9]{24}$/.test(id)) {
+            return await User.findByIdAndUpdate(id, userData, {
+                new: true,
+                runValidators: true,
+            }).select('-password');
+        } else {
+            return await User.findOneAndUpdate(
+                { clerkId: id },
+                userData,
+                {
+                    new: true,
+                    runValidators: true,
+                }
+            ).select('-password');
+        }
     }
 
     async deleteUser(id: string): Promise<IUser | null> {

@@ -18,15 +18,12 @@ export const ProductProvider = ({ children }) => {
     };
 
     // Create product (delivery) via API, keep name in frontend
-    // Requires: productId, shipperId, currApId, destApId, price, name
+    // Requires: productId, shipperId, originAccessPointId, destinationAccessPointId, price, name
     const create = async ({ productId, shipperId, currApId, destApId, price, name }) => {
         const resolvedShipperId = shipperId || user?.id;
         
-        console.log('Create delivery called with:', { productId, resolvedShipperId, currApId, destApId, price, name });
-        
         if (!productId || !resolvedShipperId || !currApId || !destApId) {
-            console.error('Missing fields:', { productId, resolvedShipperId, currApId, destApId });
-            throw new Error('Missing required fields: productId, shipperId, currApId, destApId');
+            throw new Error('Missing required fields: productId, shipperId, originAccessPoint, destinationAccessPoint');
         }
         
         // First, try to create/ensure user exists in MongoDB

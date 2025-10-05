@@ -33,12 +33,25 @@ export default class DeliveryService {
             throw new Error('User must have sender role');
         }
 
-        // Product is optional - only check if productId is provided and not a mock value
-        if (deliveryData.productId && !deliveryData.productId.startsWith('mock-')) {
+        // Convert Clerk ID to MongoDB ID for shipper
+        const shipperMongoId = shipper._id.toString();
+
+        // Handle productId - for mock products, create a fake ObjectId
+        let productMongoId: string;
+        if (deliveryData.productId && deliveryData.productId.startsWith('mock-')) {
+            // Create a deterministic fake ObjectId from the mock string
+            const mongoose = await import('mongoose');
+            productMongoId = new mongoose.Types.ObjectId().toString();
+        } else if (deliveryData.productId) {
             const product = await this.productService.findProductById(deliveryData.productId);
             if (!product) {
                 throw new Error('Product not found');
             }
+            productMongoId = (product._id as any).toString();
+        } else {
+            // No product ID provided
+            const mongoose = await import('mongoose');
+            productMongoId = new mongoose.Types.ObjectId().toString();
         }
 
         // Calculate estimated cost and distance
@@ -50,20 +63,31 @@ export default class DeliveryService {
         const { calculateStationDistance: calcDistance } = await import('@/lib/data/skytrainNetwork');
         const originAP = await this.accessPointService.findAccessPointById(deliveryData.originAccessPoint);
         const destAP = await this.accessPointService.findAccessPointById(deliveryData.destinationAccessPoint);
-        const estimatedDistance = calcDistance(originAP!.stationId, destAP!.stationId);
         
-        // Validate shipper has sufficient balance
+        if (!originAP || !destAP) {
+            throw new Error('Access point not found');
+        }
+        
+        if (!originAP.stationId || !destAP.stationId) {
+            throw new Error(`Access points must have a stationId. Origin stationId: ${originAP.stationId}, Dest stationId: ${destAP.stationId}`);
+        }
+        
+        const estimatedDistance = calcDistance(originAP.stationId, destAP.stationId);
+        
+        // Validate shipper has sufficient balance (use original shipperId to support Clerk IDs)
         await this.validateShipperBalance(shipperId, totalDeliveryCost);
 
-        // Deduct points from shipper
+        // Deduct points from shipper (use original shipperId to support Clerk IDs)
         await this.userService.addPointsToUser(shipperId, -totalDeliveryCost);
 
         // Generate verification code
         const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
 
-        // Create delivery with all required fields
+        // Create delivery with all required fields, using MongoDB IDs
         const deliveryWithCode = {
             ...deliveryData,
+            productId: productMongoId,
+            shipperId: shipperMongoId,
             recipientVerificationCode: verificationCode,
             totalCost: totalDeliveryCost,
             estimatedDistance,
