@@ -3,9 +3,10 @@ import mongoose, { Schema, Document, Model } from 'mongoose';
 
 export interface IAccessPoint extends Document {
     name: string;
-    location: string;
+    nearestStation: string;
     account: mongoose.Types.ObjectId;
-    stationId: string; // Reference to SkyTrain station node in the network graph
+    lat: Number;
+    lng: Number;
 }
 
 const AccessPointSchema: Schema<IAccessPoint> = new Schema(
@@ -15,19 +16,22 @@ const AccessPointSchema: Schema<IAccessPoint> = new Schema(
             required: [true, 'Access point name is required'],
             trim: true,
         },
-        location: {
+        nearestStation: {
             type: String,
-            required: [true, 'Location is required'],
+            required: [true, "Access point's nearest station is required"],
             trim: true,
         },
         account: {
             type: Schema.Types.ObjectId,
             ref: 'User',
         },
-        stationId: {
-            type: String,
-            required: [true, 'Station ID is required'],
-            trim: true,
+        lat: {
+            type: Number,
+            required: [true, "Access point latitude required"],
+        },
+        lng: {
+            type: Number,
+            required: [true, "Access point longitude required"],
         }
     },
     {
@@ -35,6 +39,7 @@ const AccessPointSchema: Schema<IAccessPoint> = new Schema(
     }
 );
 
-const AccessPoint: Model<IAccessPoint> = mongoose.model<IAccessPoint>('AccessPoint', AccessPointSchema);
+const AccessPoint: Model<IAccessPoint> = 
+    mongoose.models.AccessPoint || mongoose.model<IAccessPoint>('AccessPoint', AccessPointSchema);
 
 export default AccessPoint;
