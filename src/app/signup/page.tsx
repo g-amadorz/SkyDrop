@@ -1,124 +1,141 @@
 "use client";
 
 import { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { Outfit } from "next/font/google";
+import { useRouter } from "next/navigation";
 
 const outfit = Outfit({
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
 });
 
-const roles = [
-  {
-    id: "shipper",
-    title: "Shipper",
-    color: "blue",
-    emoji: "🚚",
-    description:
-      "Manage your shipments efficiently and track deliveries in real time.",
-  },
-  {
-    id: "commuter",
-    title: "Commuter",
-    color: "black",
-    emoji: "🚴",
-    description:
-      "Deliver packages along your routes and earn rewards with SkyDrop.",
-  },
-  {
-    id: "accesspoint",
-    title: "Access Point",
-    color: "orange",
-    emoji: "🏪",
-    description:
-      "Host deliveries at your location and become part of the SkyDrop network.",
-  },
-];
+export default function SignupPage() {
+  const [form, setForm] = useState({ email: "", phone: "", password: "" });
+  const router = useRouter();
 
-export default function Dashboard() {
-  const [activeRole, setActiveRole] = useState("shipper");
-  const currentRole = roles.find((r) => r.id === activeRole)!;
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setForm({ ...form, [e.target.name]: e.target.value });
+  };
+
+  // ✅ Handle form submission
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+
+    // You can later replace this with an actual signup API call to MongoDB.
+    console.log("Signup form data:", form);
+
+    // Redirect to dashboard after successful signup
+    router.push("/dashboard");
+  };
 
   return (
-    <div className={`${outfit.className} min-h-screen bg-gray-50`}>
-      {/* --- Top Nav --- */}
-      <nav className="fixed top-0 left-0 right-0 bg-white shadow-sm border-b border-gray-200 z-50">
-        <div className="max-w-5xl mx-auto flex justify-between items-center px-6 py-4">
-          {/* Logo */}
-          <h1 className="text-3xl font-extrabold text-blue-600">
-            Sky<span className="text-gray-900">Drop</span>
-          </h1>
+    <div
+      className={`${outfit.className} min-h-screen flex flex-col items-center justify-center bg-white px-6 relative`}
+    >
+      {/* --- Back Button --- */}
+      <button
+        onClick={() => router.back()}
+        className="absolute top-6 left-6 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-full w-12 h-12 text-2xl flex items-center justify-center shadow-sm transition"
+      >
+        ←
+      </button>
 
-          {/* Profile (placeholder) */}
-          <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-gray-700 font-bold">
-            N
-          </div>
+      {/* --- Logo Section --- */}
+      <div className="flex flex-col items-center text-center mb-8 mt-4">
+        <h1 className="text-4xl font-extrabold text-blue-600 leading-none">
+          Sky
+          <span className="text-gray-900 transform -rotate-2 inline-block ml-1">
+            Drop
+          </span>
+        </h1>
+        <h2 className="text-2xl font-semibold text-gray-900 mt-3">
+          Sign up for SkyDrop
+        </h2>
+      </div>
+
+      {/* --- Signup Form --- */}
+      <motion.form
+        onSubmit={handleSubmit}
+        initial={{ opacity: 0, y: 15 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4 }}
+        className="w-full max-w-md flex flex-col gap-5"
+      >
+        {/* Email */}
+        <div>
+          <label className="block text-left text-sm font-medium text-gray-800 mb-1">
+            Email
+          </label>
+          <input
+            type="email"
+            name="email"
+            value={form.email}
+            onChange={handleChange}
+            placeholder="Enter your email"
+            required
+            className="w-full border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 rounded-xl px-4 py-3 outline-none
+            text-gray-900 placeholder-gray-400 font-medium transition
+            [&:-webkit-autofill]:text-gray-900 [&:-webkit-autofill]:font-medium"
+          />
         </div>
 
-        {/* --- Role Selector (like Uber Eats/Rides) --- */}
-        <div className="flex justify-center bg-white border-t border-gray-100">
-          <div className="flex gap-10 py-3">
-            {roles.map((role) => (
-              <button
-                key={role.id}
-                onClick={() => setActiveRole(role.id)}
-                className={`flex flex-col items-center font-semibold transition-all ${
-                  activeRole === role.id
-                    ? role.color === "black"
-                      ? "text-gray-900 border-b-4 border-gray-900"
-                      : role.color === "orange"
-                      ? "text-orange-500 border-b-4 border-orange-500"
-                      : "text-blue-600 border-b-4 border-blue-600"
-                    : "text-gray-400 hover:text-gray-600 border-b-4 border-transparent"
-                }`}
-              >
-                <span className="text-2xl mb-1">{role.emoji}</span>
-                <span>{role.title}</span>
-              </button>
-            ))}
-          </div>
+        {/* Phone Number */}
+        <div>
+          <label className="block text-left text-sm font-medium text-gray-800 mb-1">
+            Mobile number
+          </label>
+          <input
+            type="tel"
+            name="phone"
+            value={form.phone}
+            onChange={handleChange}
+            placeholder="+1 123 456 7890"
+            required
+            className="w-full border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 rounded-xl px-4 py-3 outline-none
+            text-gray-900 placeholder-gray-400 font-medium transition
+            [&:-webkit-autofill]:text-gray-900 [&:-webkit-autofill]:font-medium"
+          />
         </div>
-      </nav>
 
-      {/* --- Role Content --- */}
-      <main className="pt-40 pb-20 px-6 max-w-5xl mx-auto">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={activeRole}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            transition={{ duration: 0.4 }}
-            className="text-center"
-          >
-            <h2
-              className={`text-3xl font-bold mb-3 ${
-                currentRole.color === "black"
-                  ? "text-gray-900"
-                  : currentRole.color === "orange"
-                  ? "text-orange-500"
-                  : "text-blue-600"
-              }`}
-            >
-              {currentRole.title}
-            </h2>
-            <p className="text-gray-700 mb-6">{currentRole.description}</p>
+        {/* Password */}
+        <div>
+          <label className="block text-left text-sm font-medium text-gray-800 mb-1">
+            Password
+          </label>
+          <input
+            type="password"
+            name="password"
+            value={form.password}
+            onChange={handleChange}
+            placeholder="Create a password"
+            required
+            className="w-full border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 rounded-xl px-4 py-3 outline-none
+            text-gray-900 placeholder-gray-400 font-medium transition
+            [&:-webkit-autofill]:text-gray-900 [&:-webkit-autofill]:font-medium"
+          />
+        </div>
 
-            <button
-              className={`px-8 py-3 rounded-full text-white font-semibold transition ${
-                currentRole.color === "black"
-                  ? "bg-gray-900 hover:bg-black"
-                  : currentRole.color === "orange"
-                  ? "bg-orange-500 hover:bg-orange-600"
-                  : "bg-blue-600 hover:bg-blue-700"
-              }`}
-            >
-              Manage
-            </button>
-          </motion.div>
-        </AnimatePresence>
-      </main>
+        {/* Submit Button */}
+        <button
+          type="submit"
+          className="w-full bg-gray-900 text-white py-4 rounded-full font-semibold text-lg hover:bg-black active:scale-95 transition-all"
+        >
+          Sign Up
+        </button>
+
+        {/* Login Link */}
+        <p className="text-center text-gray-500 text-sm mt-2">
+          Already have an account?{" "}
+          <a href="/signin" className="text-blue-600 font-semibold hover:underline">
+            Log in
+          </a>
+        </p>
+      </motion.form>
+
+      <footer className="text-gray-400 text-xs mt-16">
+        © 2025 SkyDrop Team
+      </footer>
     </div>
   );
 }

@@ -18,7 +18,7 @@ export default function DashboardLayout({
   const pathname = usePathname();
 
   return (
-    <div className={`${outfit.className} min-h-screen bg-gradient-to-b from-blue-50 to-white`}>
+    <div className={`${outfit.className} min-h-screen bg-white`}>
       {/* --- Fixed Nav Bar --- */}
       <motion.nav
         initial={{ y: -50, opacity: 0 }}

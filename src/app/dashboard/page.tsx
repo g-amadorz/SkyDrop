@@ -22,15 +22,12 @@ export default function Dashboard() {
 
   const currentRole = roles.find((r) => r.id === activeRole)!;
 
-  // --- Hide / show the role bar on scroll
+  // Hide/show on scroll
   useEffect(() => {
     const handleScroll = () => {
       const currentY = window.scrollY;
-      if (currentY > lastScrollY && currentY > 80) {
-        setShowRoleBar(false); // scrolling down → hide
-      } else {
-        setShowRoleBar(true); // scrolling up → show
-      }
+      if (currentY > lastScrollY && currentY > 80) setShowRoleBar(false);
+      else setShowRoleBar(true);
       setLastScrollY(currentY);
     };
     window.addEventListener("scroll", handleScroll);
@@ -38,11 +35,11 @@ export default function Dashboard() {
   }, [lastScrollY]);
 
   return (
-   <div
-  className="flex flex-col items-center text-center p-6 rounded-2xl shadow-sm bg-white border border-transparent hover:shadow-md transition"
->
-
-      <header className="fixed top-0 left-0 right-0 bg-white shadow-sm flex justify-between items-center px-6 py-4 z-20">
+    <div
+      className={`${outfit.className} flex flex-col items-center text-center bg-white min-h-screen`}
+    >
+      {/* --- Main Navbar --- */}
+      <header className="fixed top-0 left-0 right-0 bg-white shadow-sm flex justify-between items-center px-6 py-4 z-30">
         <h1 className="text-2xl font-extrabold text-blue-600">
           Sky<span className="text-gray-900">Drop</span>
         </h1>
@@ -51,37 +48,47 @@ export default function Dashboard() {
         </button>
       </header>
 
-      {/* --- Secondary Role Tabs (hide on scroll) --- */}
+      {/* --- Roles Nav Bar --- */}
       <motion.div
         initial={{ y: 0 }}
         animate={{ y: showRoleBar ? 0 : -80 }}
         transition={{ duration: 0.3, ease: "easeInOut" }}
-        className="fixed top-[64px] left-0 right-0 bg-white border-b shadow-sm flex justify-center gap-10 py-3 z-10"
+        className="fixed top-[64px] left-0 right-0 backdrop-blur-md bg-white/80 border-b border-gray-200/20 flex justify-center gap-12 py-2 z-20"
       >
         {roles.map((role) => (
           <button
             key={role.id}
             onClick={() => setActiveRole(role.id)}
-            className={`flex items-center gap-2 pb-2 transition-all ${
+            className={`relative flex items-center gap-2 pb-2 text-base font-semibold transition-all ${
               activeRole === role.id
-                ? `border-b-4 ${
-                    role.color === "blue"
-                      ? "border-blue-500 text-blue-600"
-                      : role.color === "orange"
-                      ? "border-orange-500 text-orange-500"
-                      : "border-gray-900 text-gray-900"
-                  }`
-                : "text-gray-500 border-b-4 border-transparent hover:text-gray-700"
+                ? role.color === "blue"
+                  ? "text-blue-600"
+                  : role.color === "orange"
+                  ? "text-orange-500"
+                  : "text-gray-900"
+                : "text-gray-500 hover:text-gray-800"
             }`}
           >
             <span className="text-xl">{role.emoji}</span>
-            <span className="font-semibold">{role.title}</span>
+            {role.title}
+            {activeRole === role.id && (
+              <motion.div
+                layoutId="underline"
+                className={`absolute bottom-0 left-0 right-0 h-[3px] rounded-full ${
+                  role.color === "blue"
+                    ? "bg-blue-500"
+                    : role.color === "orange"
+                    ? "bg-orange-500"
+                    : "bg-gray-900"
+                }`}
+              />
+            )}
           </button>
         ))}
       </motion.div>
 
-      {/* --- Main Section --- */}
-      <main className="pt-[140px] px-6 pb-20">
+      {/* --- Main Content --- */}
+      <main className="pt-[140px] pb-20 w-full flex flex-col items-center px-6">
         <AnimatePresence mode="wait">
           <motion.div
             key={activeRole}
@@ -89,7 +96,7 @@ export default function Dashboard() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
             transition={{ duration: 0.3 }}
-            className="text-center"
+            className="max-w-md text-center"
           >
             <h2
               className={`text-3xl font-bold mb-4 ${
