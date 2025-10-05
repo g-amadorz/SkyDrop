@@ -4,6 +4,7 @@ export interface IProduct extends Document {
   name: string;
   description: string;
   destination: string;
+  currentLocation: mongoose.Types.ObjectId;
   status: 'pending' | 'in-transit' | 'delivered' | 'cancelled';
   trackingNumber?: string;
   sender?: mongoose.Types.ObjectId;
@@ -29,9 +30,14 @@ const ProductSchema: Schema<IProduct> = new Schema(
       trim: true,
     },
     destination: {
-      type: String,
-      required: [true, 'Destination is required'],
-      trim: true,
+        accessPoint: {
+            type: Schema.Types.ObjectId,
+            ref: 'AccessPoint',
+        },
+    },
+    currentLocation: {
+        type: Schema.Types.ObjectId,
+        ref: 'AccessPoint',
     },
     status: {
       type: String,
