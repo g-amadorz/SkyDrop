@@ -19,7 +19,6 @@ export const AccesspointProvider = ({ children }) => {
             const newAp = {
                 id: prev.length === 0 ? 0 : Math.max(...prev.map(ap => ap.id ?? 0)) + 1,
                 name,
-                numProducts,
                 nearestStation,
                 lat,
                 lng,
