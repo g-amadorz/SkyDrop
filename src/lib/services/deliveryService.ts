@@ -3,6 +3,8 @@ import { UserService } from "@/lib/services/userService";
 import { ProductService } from "@/lib/services/productService";
 import { AccessPointService } from "@/lib/services/accessPointService";
 import { InitiateDeliveryInput } from "../schemas/deliverySchema";
+import { calculateStationDistance } from "../data/skytrainNetwork";
+
 
 export default class DeliveryService {
     private deliveryRepository: DeliveryRepository;
@@ -50,8 +52,6 @@ export default class DeliveryService {
             throw error;
         }
 
-
-        
         const delivery = await this.deliveryRepository.createDelivery(deliveryData);
         return delivery;
     }
@@ -127,8 +127,12 @@ export default class DeliveryService {
             throw new Error('No active delivery leg found');
         }
 
+
         // Calculate earnings for this leg
-        const earnings = this.calculateLegEarnings(distance, delivery.estimatedDistance, delivery.totalCost);
+        const earnings = await this.calculateLegEarnings(
+            currentLeg.fromAccessPoint.toString(),
+            accessPointId
+        );
 
         // Update the current leg
         currentLeg.dropoffTime = new Date();
@@ -166,9 +170,6 @@ export default class DeliveryService {
         return updatedDelivery;
     }
 
-    
-
-    // 4. RECIPIENT PICKUP (Recipient claims package)
     async recipientPickup(deliveryId: string, verificationCode: string, recipientInfo: any) {
         const delivery = await this.deliveryRepository.findDeliveryById(deliveryId);
         if (!delivery) {
@@ -183,10 +184,8 @@ export default class DeliveryService {
             throw new Error('Invalid verification code');
         }
 
-        // Calculate unused funds
         const unusedFunds = delivery.reservedAmount - delivery.paidAmount;
 
-        // Release unused funds back to shipper
         if (unusedFunds > 0) {
             await this.userService.addPointsToUser(delivery.shipperId.toString(), unusedFunds);
         }
@@ -245,22 +244,17 @@ export default class DeliveryService {
             throw new Error('Access point not found');
         }
 
-        // Import the network calculation function
-        const { calculateStationDistance } = await import('@/lib/data/skytrainNetwork');
-
-        // Calculate distance using SkyTrain network graph
-        const distance = calculateStationDistance(
+        const hops = calculateStationDistance(
             originAccessPoint.stationId,
             destinationAccessPoint.stationId
         );
 
         // Pricing constants
-        const RATE_PER_KM = 0.75; // $0.75 per km
-        const BASE_FEE = 3.00; // Minimum delivery fee
+        const COST_PER_STATION = 1.50; // $1.50 per station hop
         const PLATFORM_FEE_PERCENTAGE = 0.10; // 10% platform fee
 
         // Calculate base cost
-        const baseCost = (distance * RATE_PER_KM) + BASE_FEE;
+        const baseCost = (hops * COST_PER_STATION);
 
         // Add platform fee
         const totalCost = baseCost * (1 + PLATFORM_FEE_PERCENTAGE);
@@ -269,18 +263,27 @@ export default class DeliveryService {
         return Math.round(totalCost * 100) / 100;
     }
 
-    private calculateLegEarnings(legDistance: number, totalDistance: number, totalCost: number): number {
-        // Calculate percentage of journey completed
-        const percentageOfJourney = legDistance / totalDistance;
-        
-        // Calculate base earnings for this leg
-        const baseEarnings = totalCost * percentageOfJourney;
-        
-        // Apply platform fee (10%)
-        const platformFee = baseEarnings * 0.10;
-        const earnings = baseEarnings - platformFee;
-        
-        return Math.round(earnings * 100) / 100; // Round to 2 decimal places
+    async calculateLegEarnings(originAccessPointId: string, destinationAccessPointId: string): Promise<number> {
+        const originAccessPoint = await this.accessPointService.findAccessPointById(originAccessPointId);
+        const destinationAccessPoint = await this.accessPointService.findAccessPointById(destinationAccessPointId);
+
+        if (!originAccessPoint || !destinationAccessPoint) {
+            throw new Error('Access point not found');
+        }
+
+        const hops = calculateStationDistance(
+            originAccessPoint.stationId,
+            destinationAccessPoint.stationId
+        );
+
+        const COST_PER_STATION = 1.50; 
+        const PLATFORM_FEE_PERCENTAGE = 0.10;
+
+        const baseCost = (hops * COST_PER_STATION);
+
+        const totalCost = baseCost * (1 + PLATFORM_FEE_PERCENTAGE);
+
+        return Math.round(totalCost * 100) / 100;
     }
 
     // 7. VALIDATION & HELPERS
@@ -304,60 +307,4 @@ export default class DeliveryService {
         }
     }
 
-    async validateLocation(userId: string, requiredAccessPointId: string) {
-        // This would typically integrate with GPS/location services
-        // For now, we'll implement a basic check
-        const accessPoint = await this.accessPointService.findAccessPointById(requiredAccessPointId);
-        if (!accessPoint) {
-            throw new Error('Access point not found');
-        }
-        
-        // In a real implementation, you would:
-        // 1. Get user's current GPS coordinates
-        // 2. Calculate distance to access point
-        // 3. Verify they are within acceptable range (e.g., 100 meters)
-        // For now, we'll just return true
-        return true;
-    }
-
-    // private generateVerificationCode(): string {
-    //     // - Generate 6-digit random code
-    //     // - Return code
-    // }
-
-    // 9. TRACKING & HISTORY
-    async getDeliveryHistory(deliveryId: string) {
-        const delivery = await this.deliveryRepository.findDeliveryById(deliveryId);
-        if (!delivery) {
-            throw new Error('Delivery not found');
-        }
-        
-        // Return timeline of all legs with pickup/dropoff events
-        return {
-            deliveryId: delivery._id,
-            status: delivery.status,
-            legs: delivery.legs,
-            createdAt: delivery.createdAt,
-            completedAt: delivery.completedAt,
-        };
-    }
-
-    async trackDelivery(trackingNumber: string) {
-        // Note: This assumes trackingNumber is the delivery ID
-        // In production, you'd have a separate tracking number field
-        const delivery = await this.deliveryRepository.findDeliveryById(trackingNumber);
-        if (!delivery) {
-            throw new Error('Delivery not found');
-        }
-        
-        return {
-            trackingNumber,
-            status: delivery.status,
-            currentLocation: delivery.currentAccessPoint,
-            destination: delivery.destinationAccessPoint,
-            estimatedDistance: delivery.estimatedDistance,
-            actualDistance: delivery.actualDistance,
-            legs: delivery.legs,
-        };
-    }
 }

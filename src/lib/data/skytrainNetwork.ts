@@ -1,9 +1,3 @@
-/**
- * SkyTrain Network Graph - Millennium Line Only
- * Represents the Millennium Line as a graph structure
- * Each station is a node with connections to adjacent stations
- */
-
 export interface SkyTrainStation {
     id: string;
     name: string;
@@ -42,8 +36,8 @@ export const skyTrainNetwork: Map<string, SkyTrainStation> = new Map();
 });
 
 /**
- * Calculate distance between two stations using BFS (Breadth-First Search)
- * Returns the shortest path distance in kilometers
+ * Calculate distance between two stations by counting hops
+ * Returns the number of stations between origin and destination
  */
 export function calculateStationDistance(fromStationId: string, toStationId: string): number {
     if (fromStationId === toStationId) return 0;
@@ -55,28 +49,23 @@ export function calculateStationDistance(fromStationId: string, toStationId: str
         throw new Error('Invalid station ID');
     }
 
-    // BFS to find shortest path
-    const queue: Array<{ stationId: string; distance: number }> = [{ stationId: fromStationId, distance: 0 }];
+    // BFS to count hops (stations) between origin and destination
+    const queue: Array<{ stationId: string; hops: number }> = [{ stationId: fromStationId, hops: 0 }];
     const visited = new Set<string>([fromStationId]);
-    const distances = new Map<string, number>([[fromStationId, 0]]);
 
     while (queue.length > 0) {
         const current = queue.shift()!;
-        const currentStation = skyTrainNetwork.get(current.stationId)!;
 
         if (current.stationId === toStationId) {
-            return current.distance;
+            return current.hops;
         }
+
+        const currentStation = skyTrainNetwork.get(current.stationId)!;
 
         for (const nextStationId of currentStation.connections) {
             if (!visited.has(nextStationId)) {
                 visited.add(nextStationId);
-                const nextStation = skyTrainNetwork.get(nextStationId)!;
-                const distanceToNext = currentStation.distanceToNext || 0;
-                const newDistance = current.distance + distanceToNext;
-                
-                distances.set(nextStationId, newDistance);
-                queue.push({ stationId: nextStationId, distance: newDistance });
+                queue.push({ stationId: nextStationId, hops: current.hops + 1 });
             }
         }
     }
@@ -84,28 +73,6 @@ export function calculateStationDistance(fromStationId: string, toStationId: str
     throw new Error('No path found between stations');
 }
 
-/**
- * Get all stations on a specific line
- */
-export function getStationsByLine(line: 'expo' | 'millennium' | 'canada'): SkyTrainStation[] {
-    return Array.from(skyTrainNetwork.values()).filter(station => station.line === line);
-}
-
-/**
- * Check if two stations are on the same line
- */
-export function areStationsOnSameLine(stationId1: string, stationId2: string): boolean {
-    const station1 = skyTrainNetwork.get(stationId1);
-    const station2 = skyTrainNetwork.get(stationId2);
-    
-    if (!station1 || !station2) return false;
-    
-    return station1.line === station2.line;
-}
-
-/**
- * Get the shortest path between two stations (returns array of station IDs)
- */
 export function getShortestPath(fromStationId: string, toStationId: string): string[] {
     if (fromStationId === toStationId) return [fromStationId];
 
