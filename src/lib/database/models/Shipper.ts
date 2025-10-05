@@ -1,6 +1,6 @@
 import mongoose, { Document, Model, Schema } from "mongoose";
 
-interface IShipper extends Document {
+export interface IShipper extends Document {
     account: mongoose.Types.ObjectId;
     activeProductIds: mongoose.Types.ObjectId[];
 }

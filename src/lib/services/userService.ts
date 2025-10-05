@@ -1,6 +1,6 @@
-import { createAccountInput, updateAccountInput } from '@/schemas/accountSchema';
+import { createAccountInput, updateAccountInput } from '@/lib/schemas/accountSchema';
 import { IUser } from '@/lib/database/models/User';
-import { UserRepository } from '@/repositories/userRepository';
+import { UserRepository } from '@/lib/database/repository/userRepository';
 import bcrypt from 'bcrypt';
 
 export class UserService {
@@ -10,7 +10,7 @@ export class UserService {
         this.repository = new UserRepository();
     }
 
-    async registerUser(userData: createAccountInput): Promise<IUser> {
+    async createUser(userData: createAccountInput): Promise<IUser> {
         const existingUser = await this.repository.findUserByEmail(userData.email);
         if (existingUser) {
             throw new Error('User with this email already exists');
@@ -42,14 +42,8 @@ export class UserService {
         return user;
     }
 
-    async getUserById(id: string): Promise<IUser> {
-        const user = await this.repository.findUserById(id);
-        
-        if (!user) {
-            throw new Error('User not found');
-        }
-
-        return user;
+    async findUserById(id: string): Promise<IUser | null> {
+        return await this.repository.findUserById(id);
     }
 
     async updateUser(id: string, userData: updateAccountInput): Promise<IUser> {
@@ -67,12 +61,8 @@ export class UserService {
         return updatedUser;
     }
 
-    async deleteUser(id: string): Promise<void> {
-        const deletedUser = await this.repository.deleteUser(id);
-        
-        if (!deletedUser) {
-            throw new Error('User not found');
-        }
+    async deleteUser(id: string): Promise<IUser | null> {
+        return await this.repository.deleteUser(id);
     }
 
     async getUsersByRole(role: 'rider' | 'sender' | 'admin'): Promise<IUser[]> {
@@ -84,7 +74,10 @@ export class UserService {
     }
 
     async addPointsToUser(userId: string, points: number): Promise<IUser> {
-        const user = await this.getUserById(userId);
+        const user = await this.findUserById(userId);
+        if (!user) {
+            throw new Error('User not found');
+        }
         const newPoints = user.points + points;
 
         if (newPoints < 0) {
@@ -103,7 +96,10 @@ export class UserService {
     }
 
     async toggleUserRole(userId: string, newRole: 'rider' | 'sender'): Promise<IUser> {
-        const user = await this.getUserById(userId);
+        const user = await this.findUserById(userId);
+        if (!user) {
+            throw new Error('User not found');
+        }
 
         // Prevent toggling if user is an admin
         if (user.role === 'admin') {

@@ -11,7 +11,7 @@ export class ProductService {
     }
 
     async createProduct(productData: createProductInput) {
-        const product = await this.repository.createProduct(productData);
+        return await this.repository.createProduct(productData);
     }
 
     async findProductById(id: string) {
