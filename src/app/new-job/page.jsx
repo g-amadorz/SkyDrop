@@ -14,7 +14,9 @@ import {
   Alert,
   Card,
   CardContent,
-  CardActions
+  CardActions,
+  Select,
+  MenuItem
 } from "@mui/material";
 import MenuIcon from "@mui/icons-material/Menu";
 import CloseIcon from "@mui/icons-material/Close";
@@ -51,8 +53,17 @@ const NewJob = () => {
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [snack, setSnack] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // Track selected drop-off station for each job
+  const [dropOffSelections, setDropOffSelections] = useState({});
 
-  const isMobile = useMediaQuery("(max-width:900px)");
+  // SSR-safe media query
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const check = () => setIsMobile(window.matchMedia("(max-width:900px)").matches);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
 
   // Only show products with no commuterPN
   const availableProducts = products.filter(p => !p.commuterPN);
@@ -95,44 +106,65 @@ const NewJob = () => {
           >
             <Typography variant="subtitle1" fontWeight="bold">{name}</Typography>
             <Box sx={{ maxHeight: 300, overflowY: 'auto', width: 250 }}>
-              {relatedJobs.map(job => (
-                <Card key={job.id} sx={{ my: 1 }}>
-                  <CardContent>
-                    <Typography variant="body2">
-                      From <b>{job.currApId}</b> → <b>{job.destApId}</b><br />
-                      Hops: {bfsShortestPath(skytrainGraph, job.currApId, job.destApId).hops}
-                    </Typography>
-                  </CardContent>
-                  <CardActions>
-                    <Button
-                      size="small"
-                      variant="contained"
-                      onClick={() => { handleClaim(job.id); }}
-                      disabled={selectedProduct === job.id || !isValidPhone}
-                    >
-                      {selectedProduct === job.id ? "Claimed" : "Claim"}
-                    </Button>
-                    {openJobId === job.id ? (
+              {relatedJobs.map(job => {
+                // Get path for this job
+                const { path } = bfsShortestPath(skytrainGraph, job.currApId, job.destApId);
+                // Default drop-off is the last station
+                const selectedDrop = dropOffSelections[job.id] || path[path.length - 1];
+                return (
+                  <Card key={job.id} sx={{ my: 1 }}>
+                    <CardContent sx={{ p: 1.5 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', mb: 0.5, fontSize: '0.9rem' }}>
+                        <Typography variant="body2" component="span" sx={{ mr: 0.5, fontSize: '0.9rem' }}>
+                          From <b>{job.currApId}</b> →
+                        </Typography>
+                        <Select
+                          size="small"
+                          value={selectedDrop}
+                          onChange={e => setDropOffSelections(s => ({ ...s, [job.id]: e.target.value }))}
+                          sx={{ mx: 1, minWidth: 120, background: 'white', fontSize: '0.9rem' }}
+                          MenuProps={{ PaperProps: { sx: { fontSize: '0.9rem' } } }}
+                        >
+                          {path.slice(1).map(station => (
+                            <MenuItem key={station} value={station} sx={{ fontSize: '0.9rem' }}>{station}</MenuItem>
+                          ))}
+                        </Select>
+                      </Box>
+                      <Typography variant="body2" sx={{ m: 0 }} style={{margin: "8px 0 0 0"}}>
+                        Hops: {bfsShortestPath(skytrainGraph, job.currApId, selectedDrop).hops}
+                      </Typography>
+                    </CardContent>
+                    <CardActions>
                       <Button
                         size="small"
-                        variant="outlined"
-                        color="secondary"
-                        onClick={() => setOpenJobId(null)}
+                        variant="contained"
+                        onClick={() => { handleClaim(job.id); }}
+                        disabled={selectedProduct === job.id || !isValidPhone}
                       >
-                        Hide Path
+                        {selectedProduct === job.id ? "Claimed" : "Claim"}
                       </Button>
-                    ) : (
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        onClick={() => setOpenJobId(job.id)}
-                      >
-                        Show Path
-                      </Button>
-                    )}
-                  </CardActions>
-                </Card>
-              ))}
+                      {openJobId === job.id ? (
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          color="secondary"
+                          onClick={() => setOpenJobId(null)}
+                        >
+                          Hide Path
+                        </Button>
+                      ) : (
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          onClick={() => setOpenJobId(job.id)}
+                        >
+                          Show Path
+                        </Button>
+                      )}
+                    </CardActions>
+                  </Card>
+                );
+              })}
             </Box>
           </Popup>
         </Marker>
@@ -142,7 +174,14 @@ const NewJob = () => {
 
   // Get the path for the open job (if any)
   const openJob = openJobId ? availableProducts.find(j => j.id === openJobId) : null;
-  const openPath = openJob ? bfsShortestPath(skytrainGraph, openJob.currApId, openJob.destApId).path : [];
+  // Use selected drop-off for open job if set
+  let openPath = [];
+  if (openJob) {
+    const { path } = bfsShortestPath(skytrainGraph, openJob.currApId, openJob.destApId);
+    const selectedDrop = dropOffSelections[openJob.id] || path[path.length - 1];
+    const dropIdx = path.indexOf(selectedDrop);
+    openPath = dropIdx > 0 ? path.slice(0, dropIdx + 1) : path;
+  }
 
   // Job list component for desktop
   const JobList = (
@@ -302,20 +341,20 @@ const NewJob = () => {
                 positions={openPath.map(station => stationCoords[station])}
                 pathOptions={{ color: 'blue', weight: 4 }}
               />
-              {/* Only show red pin for the end station, dots for intermediate */}
+              {/* Only show red pin for the selected drop-off, dots for intermediate */}
               {openPath.map((station, idx) => {
                 if (idx === 0) return null; // skip start marker
                 const [lat, lng] = stationCoords[station];
                 let icon = undefined;
-                  if (idx === openPath.length - 1) {
-                      icon = L.icon({
-                        iconUrl: '/red-pin.png',
-                        iconSize: [25, 41], // width, height
-                        iconAnchor: [12.5, 41] // bottom center
-                      });
-                  } else {
-                    icon = L.divIcon({ className: '', html: '<div style="width:12px;height:12px;background:#888;border-radius:50%;border:2px solid #fff;"></div>' });
-                  }
+                if (idx === openPath.length - 1) {
+                  icon = L.icon({
+                    iconUrl: '/red-pin.png',
+                    iconSize: [25, 41],
+                    iconAnchor: [12.5, 41]
+                  });
+                } else {
+                  icon = L.divIcon({ className: '', html: '<div style="width:12px;height:12px;background:#888;border-radius:50%;border:2px solid #fff;"></div>' });
+                }
                 return (
                   <Marker key={station + idx} position={[lat, lng]} icon={icon} interactive={false} />
                 );
