@@ -54,13 +54,16 @@ export const ProductProvider = ({ children }) => {
             }),
         });
         const json = await res.json();
+        console.log('Created delivery response:', json); // Debug log
         if (json.success && json.data) {
             // Attach name for frontend
             const newProduct = { ...json.data, name };
             const newProducts = [...products, newProduct];
             syncProducts(newProducts);
+            console.log('Product created successfully:', newProduct); // Debug log
             return newProduct;
         } else {
+            console.error('Failed to create product:', json);
             throw new Error(json.error || 'Failed to create product');
         }
     };
