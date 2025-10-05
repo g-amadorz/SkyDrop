@@ -1,4 +1,4 @@
-import Delivery from "@/models/Delivery"
+import Delivery from "@/lib/database/models/Delivery"
 import {InitiateDeliveryInput} from "@/lib/schemas/deliverySchema"
 
 export class DeliveryRepository {

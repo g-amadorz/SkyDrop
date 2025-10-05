@@ -197,12 +197,6 @@ export default class DeliveryService {
             completedAt: new Date(),
         });
 
-        // Update product status to delivered
-        // Note: Product update needs to be done via repository directly due to schema limitations
-        // await this.productService.updateProduct(delivery.productId.toString(), {
-        //     status: 'delivered',
-        // });
-
         return updatedDelivery;
     }
 

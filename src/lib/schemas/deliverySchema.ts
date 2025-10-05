@@ -32,13 +32,11 @@ export const dropoffPackageSchema = z.object({
   deliveryId: z.string(),
   commuterId: z.string(),
   accessPointId: z.string(),
-  distance: z.number().min(0),
 });
 
 // Schema for recipient pickup
 export const recipientPickupSchema = z.object({
   deliveryId: z.string(),
-  verificationCode: z.string().min(4).max(8),
   recipientPhone: z.string().optional(),
   recipientName: z.string().optional(),
 });
