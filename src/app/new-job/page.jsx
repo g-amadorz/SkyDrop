@@ -218,14 +218,14 @@ const NewJob = () => {
         {availableProducts.length === 0 ? <ListItem><ListItemText primary="No jobs available" /></ListItem> :
           availableProducts.map(p => (
             <ListItem key={p.id} divider alignItems="flex-start">
-              <Box sx={{ width: '100%', display: 'flex', justifyContent: 'space-between' }}>
+              <Box sx={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: "center" }}>
                 <Box>
                   <Typography variant="body1">From: {p.currApId} → {p.destApId}</Typography>
                   <Typography variant="body2" color="text.secondary">
                     Hops: {bfsShortestPath(skytrainGraph, resolveToStation(p.currApId), resolveToStation(p.destApId)).hops}
                   </Typography>
                 </Box>
-                <Button size="small" variant="contained" onClick={() => handleClaim(p.id)} disabled={selectedProduct === p.id || !isValidPhone}>
+                <Button size="small" sx={{height: "50%"}} variant="contained" onClick={() => handleClaim(p.id)} disabled={selectedProduct === p.id || !isValidPhone}>
                   {selectedProduct === p.id ? "Claimed" : "Claim"}
                 </Button>
               </Box>
