@@ -66,19 +66,12 @@ const NewJob = () => {
     }
   };
 
-  // Only include coordinates that exist in available jobs
+  // Only show pickup (origin) markers for currApId
   const markers = useMemo(() => {
-    const jobStations = new Set();
-    availableProducts.forEach(p => {
-      if (stationCoords[p.currApId]) jobStations.add(p.currApId);
-      if (stationCoords[p.destApId]) jobStations.add(p.destApId);
-    });
-
-    return Array.from(jobStations).map(name => {
+    const pickupStations = Array.from(new Set(availableProducts.map(p => p.currApId)));
+    return pickupStations.map(name => {
       const [lat, lng] = stationCoords[name];
-      const relatedJobs = availableProducts.filter(
-        p => p.currApId === name || p.destApId === name
-      );
+      const relatedJobs = availableProducts.filter(p => p.currApId === name);
       return (
         <Marker key={name} position={[lat, lng]}>
           <Popup>
