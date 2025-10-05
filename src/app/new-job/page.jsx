@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect } from "react";
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import { motion } from "framer-motion";
 import { Outfit } from "next/font/google";
 import { TextField, Autocomplete, Snackbar, Alert, Typography, Card, CardContent, CardActions, Button } from "@mui/material";
@@ -36,6 +37,14 @@ export default function NewJob() {
   const [origin, setOrigin] = useState("");
   const [destination, setDestination] = useState("");
   const [filteredDeliveries, setFilteredDeliveries] = useState([]);
+  const [filterMode, setFilterMode] = useState("exact"); // "exact" or "along-route"
+  const [isFiltering, setIsFiltering] = useState(false); // Track if user has applied a filter
+  const [mounted, setMounted] = useState(false);
+
+  // Prevent hydration issues
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Leaflet icons setup
   useEffect(() => {
@@ -73,17 +82,19 @@ export default function NewJob() {
 
   // Combine Access Points + Stations for autocomplete
   const accessPointOptions =
-    accessPoints?.map((ap) => ({
+    accessPoints?.map((ap, index) => ({
       label: `${ap.name} (Access Point)`,
       value: ap._id || ap.id,
       name: ap.name,
       nearestStation: ap.stationId || ap.nearestStation,
+      id: `ap-${ap._id || ap.id || index}`, // Unique ID for each option
     })) || [];
 
   const stationOptions = Object.keys(skytrainGraph).map((station) => ({
     label: `${station} (Station)`,
     value: station,
     name: station,
+    id: `station-${station}`, // Unique ID for each option
   }));
 
   const allOptions = [...accessPointOptions, ...stationOptions];
@@ -110,25 +121,50 @@ export default function NewJob() {
       return;
     }
 
+    setIsFiltering(true); // Mark that we're now filtering
+
+    const selectedOrigin = origin.includes('(Station)') ? origin.split(' (')[0] : resolveToStation(origin);
+    const selectedDest = destination.includes('(Station)') ? destination.split(' (')[0] : resolveToStation(destination);
+    
+    // Calculate user's route
+    const userRoute = bfsShortestPath(skytrainGraph, selectedOrigin, selectedDest);
+    const userPath = userRoute.path || [];
+
     const filtered = deliveries.filter((delivery) => {
       const deliveryOrigin = resolveToStation(delivery.originAccessPoint);
       const deliveryDest = resolveToStation(delivery.destinationAccessPoint);
-      const selectedOrigin = origin.includes('(Station)') ? origin.split(' (')[0] : resolveToStation(origin);
-      const selectedDest = destination.includes('(Station)') ? destination.split(' (')[0] : resolveToStation(destination);
 
-      return deliveryOrigin === selectedOrigin && deliveryDest === selectedDest;
+      if (filterMode === "exact") {
+        // Exact match: delivery must have same origin and destination
+        return deliveryOrigin === selectedOrigin && deliveryDest === selectedDest;
+      } else {
+        // Along route: delivery's origin and destination must both be on user's path
+        return userPath.includes(deliveryOrigin) && userPath.includes(deliveryDest) &&
+               userPath.indexOf(deliveryOrigin) < userPath.indexOf(deliveryDest);
+      }
     });
 
     setFilteredDeliveries(filtered);
     if (filtered.length === 0) {
-      setSnackMessage("No jobs found for this route");
+      setSnackMessage(`No jobs found ${filterMode === "exact" ? "for this exact route" : "along your route"}`);
       setSnackSeverity("info");
       setSnack(true);
     } else {
-      setSnackMessage(`Found ${filtered.length} job(s) for this route!`);
+      setSnackMessage(`Found ${filtered.length} job(s) ${filterMode === "exact" ? "for this route" : "along your route"}!`);
       setSnackSeverity("success");
       setSnack(true);
     }
+  };
+
+  // Clear filter function
+  const handleClearFilter = () => {
+    setIsFiltering(false);
+    setFilteredDeliveries([]);
+    setOrigin("");
+    setDestination("");
+    setSnackMessage("Showing all available jobs");
+    setSnackSeverity("info");
+    setSnack(true);
   };
 
   const handleClaim = async (deliveryId) => {
@@ -195,63 +231,118 @@ export default function NewJob() {
     return bfsShortestPath(skytrainGraph, start, end);
   };
 
-  // Animated Markers for Selected Delivery
-  const markers = useMemo(() => {
-    if (!selectedDelivery) return [];
-    
-    const delivery = filteredDeliveries.find(d => d._id === selectedDelivery);
-    if (!delivery) return [];
+  // Show all deliveries on map (or filtered ones if filtering is active)
+  const deliveriesToShow = isFiltering && filteredDeliveries.length >= 0 ? filteredDeliveries : deliveries;
 
-    const { path } = calculateRoute(delivery.originAccessPoint, delivery.destinationAccessPoint);
+  // Markers for all deliveries
+  const allMarkers = useMemo(() => {
     const L = typeof window !== "undefined" ? require("leaflet") : null;
-    if (!L) return [];
+    if (!L || deliveriesToShow.length === 0) return [];
 
-    return path.map((stationId, idx) => {
-      const pos = stationCoords[stationId];
-      if (!pos) return null;
+    const markers = [];
+    deliveriesToShow.forEach((delivery, deliveryIdx) => {
+      const originAP = getAccessPointById(delivery.originAccessPoint);
+      const destAP = getAccessPointById(delivery.destinationAccessPoint);
+      
+      const originStation = resolveToStation(delivery.originAccessPoint);
+      const destStation = resolveToStation(delivery.destinationAccessPoint);
+      
+      const originPos = stationCoords[originStation];
+      const destPos = stationCoords[destStation];
+
+      const isSelected = selectedDelivery === delivery._id;
+      const color = isSelected ? "#3B82F6" : "#9CA3AF";
+
+      if (originPos) {
+        markers.push(
+          <Marker
+            key={`origin-${delivery._id}`}
+            position={originPos}
+            icon={L.divIcon({
+              className: "",
+              html: `<div style="width:${isSelected ? 16 : 12}px;height:${isSelected ? 16 : 12}px;background:${color};border-radius:50%;border:2px solid white;box-shadow:0 2px 4px rgba(0,0,0,0.2);"></div>`,
+            })}
+          />
+        );
+      }
+
+      if (destPos) {
+        markers.push(
+          <Marker
+            key={`dest-${delivery._id}`}
+            position={destPos}
+            icon={L.divIcon({
+              className: "",
+              html: `<div style="width:${isSelected ? 16 : 12}px;height:${isSelected ? 16 : 12}px;background:#EF4444;border-radius:50%;border:2px solid white;box-shadow:0 2px 4px rgba(0,0,0,0.2);"></div>`,
+            })}
+          />
+        );
+      }
+    });
+
+    return markers;
+  }, [deliveriesToShow, selectedDelivery]);
+
+  // Polylines for all deliveries
+  const allPaths = useMemo(() => {
+    if (deliveriesToShow.length === 0) return [];
+
+    return deliveriesToShow.map((delivery) => {
+      const { path } = calculateRoute(delivery.originAccessPoint, delivery.destinationAccessPoint);
+      const pathCoords = path.map(stationId => stationCoords[stationId]).filter(Boolean);
+
+      if (pathCoords.length < 2) return null;
+
+      const isSelected = selectedDelivery === delivery._id;
+      const color = isSelected ? "#3B82F6" : "#D1D5DB";
+      const weight = isSelected ? 4 : 2;
 
       return (
-        <Marker
-          key={`marker-${idx}`}
-          position={pos}
-          icon={L.divIcon({
-            className: "",
-            html: `<div style="width:14px;height:14px;background:${
-              idx === 0 ? "#3B82F6" : idx === path.length - 1 ? "#EF4444" : "#555"
-            };border-radius:50%;border:2px solid white;"></div>`,
-          })}
+        <Polyline
+          key={`path-${delivery._id}`}
+          positions={pathCoords}
+          pathOptions={{ color, weight, opacity: isSelected ? 1 : 0.5 }}
         />
       );
     }).filter(Boolean);
-  }, [selectedDelivery, filteredDeliveries]);
-
-  // Polyline for Selected Delivery
-  const renderPath = () => {
-    if (!selectedDelivery) return null;
-    
-    const delivery = filteredDeliveries.find(d => d._id === selectedDelivery);
-    if (!delivery) return null;
-
-    const { path } = calculateRoute(delivery.originAccessPoint, delivery.destinationAccessPoint);
-    const pathCoords = path.map(stationId => stationCoords[stationId]).filter(Boolean);
-
-    if (pathCoords.length < 2) return null;
-
-    return (
-      <Polyline
-        positions={pathCoords}
-        pathOptions={{ color: "#3B82F6", weight: 4 }}
-      />
-    );
-  };
+  }, [deliveriesToShow, selectedDelivery]);
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4 }}
-      className={`${outfit.className} flex flex-col items-center text-center px-6 pt-6 pb-10 bg-white min-h-screen`}
-    >
+    <div className={`${outfit.className} min-h-screen bg-white`}>
+      {/* --- Fixed Nav Bar --- */}
+      <motion.nav
+        initial={{ y: -50, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ duration: 0.4 }}
+        className="fixed top-0 left-0 w-full bg-white/70 backdrop-blur-md shadow-sm border-b border-gray-200 z-50"
+      >
+        <div className="max-w-7xl mx-auto flex items-center justify-between px-6 py-4">
+          <Link href="/dashboard" className="flex items-baseline gap-1">
+            <h1 className="text-2xl font-extrabold text-blue-600">
+              Sky
+              <span className="text-gray-900 transform -rotate-2 inline-block ml-0.5">
+                Drop
+              </span>
+            </h1>
+          </Link>
+          <div className="flex items-center gap-4">
+            <Link
+              href="/dashboard/profile"
+              className="text-gray-700 hover:text-blue-600 font-medium transition"
+            >
+              Profile
+            </Link>
+          </div>
+        </div>
+      </motion.nav>
+
+      {/* --- Main Content --- */}
+      <motion.main
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4 }}
+        className="pt-24 flex flex-col items-center text-center px-6 pb-10"
+      >
       {/* Header */}
       <h1 className="text-4xl font-extrabold text-gray-900 mb-2">
         Become a <span className="text-gray-900">Commuter</span>
@@ -267,23 +358,27 @@ export default function NewJob() {
       )}
 
       {/* Phone Number Input */}
-      <div className="w-full max-w-md mb-6">
-        <TextField
-          label="Your Phone Number"
-          value={phone}
-          onChange={e => setPhone(e.target.value)}
-          fullWidth
-          placeholder="e.g. 6041234567"
-          error={phone.length > 0 && !isValidPhone}
-          helperText={!isValidPhone && phone.length > 0 ? "Enter a valid 10-digit phone number" : ""}
-        />
-      </div>
+      {mounted && (
+        <div className="w-full max-w-md mb-6">
+          <TextField
+            label="Your Phone Number"
+            value={phone}
+            onChange={e => setPhone(e.target.value)}
+            fullWidth
+            placeholder="e.g. 6041234567"
+            error={phone.length > 0 && !isValidPhone}
+            helperText={!isValidPhone && phone.length > 0 ? "Enter a valid 10-digit phone number" : ""}
+          />
+        </div>
+      )}
 
       {/* Origin / Destination Selection */}
-      <div className="w-full max-w-md mb-8 flex flex-col gap-4">
+      {mounted && (
+        <div className="w-full max-w-md mb-8 flex flex-col gap-4">
         <Autocomplete
           options={allOptions}
           getOptionLabel={(option) => option.label}
+          getOptionKey={(option) => option.id}
           onChange={(_, newValue) => setOrigin(newValue?.value || "")}
           renderInput={(params) => <TextField {...params} label="Origin (Access Point or Station)" required />}
         />
@@ -291,9 +386,36 @@ export default function NewJob() {
         <Autocomplete
           options={allOptions}
           getOptionLabel={(option) => option.label}
+          getOptionKey={(option) => option.id}
           onChange={(_, newValue) => setDestination(newValue?.value || "")}
           renderInput={(params) => <TextField {...params} label="Destination (Access Point or Station)" required />}
         />
+
+        {/* Filter Mode Toggle */}
+        <div className="flex gap-2 p-1 bg-gray-100 rounded-full">
+          <button
+            type="button"
+            onClick={() => setFilterMode("exact")}
+            className={`flex-1 py-2 px-4 rounded-full font-medium transition ${
+              filterMode === "exact"
+                ? "bg-white text-gray-900 shadow-sm"
+                : "text-gray-600 hover:text-gray-900"
+            }`}
+          >
+            Exact Route
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilterMode("along-route")}
+            className={`flex-1 py-2 px-4 rounded-full font-medium transition ${
+              filterMode === "along-route"
+                ? "bg-white text-gray-900 shadow-sm"
+                : "text-gray-600 hover:text-gray-900"
+            }`}
+          >
+            Along Route
+          </button>
+        </div>
 
         <button
           onClick={handleFilterJobs}
@@ -301,16 +423,43 @@ export default function NewJob() {
         >
           Find Jobs
         </button>
+        
+        {isFiltering && (
+          <button
+            onClick={handleClearFilter}
+            className="py-2 border-2 border-gray-300 hover:border-gray-400 text-gray-700 font-semibold rounded-full transition"
+          >
+            Clear Filter & Show All
+          </button>
+        )}
+      </div>
+      )}
+
+      {/* Map Visualization - Always Visible */}
+      <div className="w-full max-w-5xl mb-10 rounded-xl overflow-hidden border border-gray-200 shadow-md">
+        <MapContainer
+          center={[49.25, -123.1]}
+          zoom={11}
+          scrollWheelZoom={false}
+          style={{ height: "500px", width: "100%" }}
+        >
+          <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+          {allPaths}
+          {allMarkers}
+        </MapContainer>
       </div>
 
       {/* Available Jobs */}
-      {filteredDeliveries.length > 0 && (
-        <div className="w-full max-w-3xl mb-10">
+      {deliveriesToShow.length > 0 && (
+        <div className="w-full max-w-5xl mb-10">
           <p className="text-lg font-semibold text-gray-800 mb-4">
-            Available Jobs for this route:
+            {isFiltering 
+              ? `Filtered Jobs ${filterMode === "exact" ? "for this route" : "along your route"} (${deliveriesToShow.length})`
+              : `All Available Jobs (${deliveriesToShow.length})`
+            }
           </p>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {filteredDeliveries.map((delivery) => {
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {deliveriesToShow.map((delivery) => {
               const originAP = getAccessPointById(delivery.originAccessPoint);
               const destAP = getAccessPointById(delivery.destinationAccessPoint);
               const { hops } = calculateRoute(delivery.originAccessPoint, delivery.destinationAccessPoint);
@@ -321,7 +470,7 @@ export default function NewJob() {
                   onClick={() => setSelectedDelivery(delivery._id)}
                   className={`cursor-pointer transition-all ${
                     selectedDelivery === delivery._id
-                      ? "border-2 border-gray-900 bg-gray-50"
+                      ? "border-2 border-blue-600 bg-blue-50"
                       : "border border-gray-200 hover:border-gray-400"
                   }`}
                   sx={{ borderRadius: 4 }}
@@ -335,7 +484,7 @@ export default function NewJob() {
                     </Typography>
                     <Typography color="text.secondary" variant="body2">
                       Reward:{" "}
-                      <span className="font-semibold text-gray-900">
+                      <span className="font-semibold text-blue-600">
                         {delivery.totalCost} pts
                       </span>
                     </Typography>
@@ -364,28 +513,13 @@ export default function NewJob() {
         </div>
       )}
 
-      {/* Map Visualization */}
-      {selectedDelivery && (
-        <div className="w-full max-w-3xl rounded-xl overflow-hidden border border-gray-200 shadow-md">
-          <MapContainer
-            center={[49.25, -123.1]}
-            zoom={11}
-            scrollWheelZoom={false}
-            style={{ height: "420px", width: "100%" }}
-          >
-            <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-            {markers}
-            {renderPath()}
-          </MapContainer>
-        </div>
-      )}
-
       {/* Snackbar Notification */}
       <Snackbar open={snack} autoHideDuration={3000} onClose={() => setSnack(false)}>
         <Alert severity={snackSeverity} sx={{ width: "100%" }}>
           {snackMessage}
         </Alert>
       </Snackbar>
-    </motion.div>
+      </motion.main>
+    </div>
   );
 }
