@@ -1,11 +1,13 @@
 "use client";
-
-import { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect } from "react";
+import {
+  Box, TextField, Button, Typography, Drawer, IconButton, List,
+  ListItem, ListItemText, Snackbar, Alert, Card, CardContent, CardActions,
+  Select, MenuItem
+} from "@mui/material";
+import MenuIcon from "@mui/icons-material/Menu";
+import CloseIcon from "@mui/icons-material/Close";
 import dynamic from "next/dynamic";
-import Link from "next/link";
-import { motion } from "framer-motion";
-import { Outfit } from "next/font/google";
-import { TextField, Autocomplete, Snackbar, Alert, Typography, Card, CardContent, CardActions, Button } from "@mui/material";
 import { useUser } from "@clerk/nextjs";
 import { useAccesspoint } from "../contexts/AccesspointContext";
 import "leaflet/dist/leaflet.css";
@@ -16,16 +18,12 @@ import { stationCoords, bfsShortestPath, skytrainGraph } from "../compute/CalcHo
 const MapContainer = dynamic(() => import("react-leaflet").then(mod => mod.MapContainer), { ssr: false });
 const TileLayer = dynamic(() => import("react-leaflet").then(mod => mod.TileLayer), { ssr: false });
 const Marker = dynamic(() => import("react-leaflet").then(mod => mod.Marker), { ssr: false });
+const Popup = dynamic(() => import("react-leaflet").then(mod => mod.Popup), { ssr: false });
 const Polyline = dynamic(() => import("react-leaflet").then(mod => mod.Polyline), { ssr: false });
 
-const outfit = Outfit({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-});
-
-export default function NewJob() {
+const NewJob = () => {
   const { user } = useUser();
-  const { accessPoints } = useAccesspoint();
+  const { accessPoints } = useAccesspoint ? useAccesspoint() : { accessPoints: [] };
 
   const [deliveries, setDeliveries] = useState([]);
   const [phone, setPhone] = useState("");
@@ -33,18 +31,12 @@ export default function NewJob() {
   const [snack, setSnack] = useState(false);
   const [snackMessage, setSnackMessage] = useState("");
   const [snackSeverity, setSnackSeverity] = useState("success");
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [dropOffSelections, setDropOffSelections] = useState({});
+  const [openJobId, setOpenJobId] = useState(null);
+  const [isMobile, setIsMobile] = useState(false);
+  const [showAllMarkers, setShowAllMarkers] = useState(true);
   const [loading, setLoading] = useState(false);
-  const [origin, setOrigin] = useState("");
-  const [destination, setDestination] = useState("");
-  const [filteredDeliveries, setFilteredDeliveries] = useState([]);
-  const [filterMode, setFilterMode] = useState("exact"); // "exact" or "along-route"
-  const [isFiltering, setIsFiltering] = useState(false); // Track if user has applied a filter
-  const [mounted, setMounted] = useState(false);
-
-  // Prevent hydration issues
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   // Leaflet icons setup
   useEffect(() => {
@@ -60,6 +52,14 @@ export default function NewJob() {
     }
   }, []);
 
+  // Mobile media query
+  useEffect(() => {
+    const check = () => setIsMobile(window.matchMedia("(max-width:900px)").matches);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
+
   // Fetch available deliveries
   useEffect(() => {
     const fetchDeliveries = async () => {
@@ -67,7 +67,6 @@ export default function NewJob() {
         const res = await fetch('/api/deliveries?status=awaiting-pickup');
         const data = await res.json();
         if (data.success && data.data?.deliveries) {
-          console.log('Fetched deliveries:', data.data.deliveries);
           setDeliveries(data.data.deliveries);
         }
       } catch (error) {
@@ -81,105 +80,16 @@ export default function NewJob() {
     return () => clearInterval(interval);
   }, []);
 
-  // Combine Access Points + Stations for autocomplete
-  const accessPointOptions =
-    accessPoints?.map((ap, index) => ({
-      label: `${ap.name} (Access Point)`,
-      value: ap._id || ap.id,
-      name: ap.name,
-      nearestStation: ap.stationId || ap.nearestStation,
-      id: `ap-${ap._id || ap.id || index}`, // Unique ID for each option
-    })) || [];
-
-  const stationOptions = Object.keys(skytrainGraph).map((station) => ({
-    label: `${station} (Station)`,
-    value: station,
-    name: station,
-    id: `station-${station}`, // Unique ID for each option
-  }));
-
-  const allOptions = [...accessPointOptions, ...stationOptions];
-
+  const availableDeliveries = deliveries;
   const isValidPhone = /^\d{10}$/.test(phone);
 
-  // Helper to get access point by ID
-  const getAccessPointById = (id) => {
-    return accessPoints?.find(ap => ap._id === id || ap.id === id);
-  };
-
-  // Helper: AccessPoint ID → Station
-  const resolveToStation = (accessPointId) => {
-    const ap = getAccessPointById(accessPointId);
-    return ap?.stationId || ap?.nearestStation || accessPointId;
-  };
-
-  // Filter deliveries based on origin/destination selection
-  const handleFilterJobs = () => {
-    if (!origin || !destination) {
-      setSnackMessage("Please select both origin and destination");
-      setSnackSeverity("warning");
-      setSnack(true);
-      return;
-    }
-
-    setIsFiltering(true); // Mark that we're now filtering
-
-    const selectedOrigin = origin.includes('(Station)') ? origin.split(' (')[0] : resolveToStation(origin);
-    const selectedDest = destination.includes('(Station)') ? destination.split(' (')[0] : resolveToStation(destination);
-    
-    // Calculate user's route
-    const userRoute = bfsShortestPath(skytrainGraph, selectedOrigin, selectedDest);
-    const userPath = userRoute.path || [];
-
-    const filtered = deliveries.filter((delivery) => {
-      const deliveryOrigin = resolveToStation(delivery.originAccessPoint);
-      const deliveryDest = resolveToStation(delivery.destinationAccessPoint);
-
-      if (filterMode === "exact") {
-        // Exact match: delivery must have same origin and destination
-        return deliveryOrigin === selectedOrigin && deliveryDest === selectedDest;
-      } else {
-        // Along route: delivery's origin and destination must both be on user's path
-        return userPath.includes(deliveryOrigin) && userPath.includes(deliveryDest) &&
-               userPath.indexOf(deliveryOrigin) < userPath.indexOf(deliveryDest);
-      }
-    });
-
-    setFilteredDeliveries(filtered);
-    if (filtered.length === 0) {
-      setSnackMessage(`No jobs found ${filterMode === "exact" ? "for this exact route" : "along your route"}`);
-      setSnackSeverity("info");
-      setSnack(true);
-    } else {
-      setSnackMessage(`Found ${filtered.length} job(s) ${filterMode === "exact" ? "for this route" : "along your route"}!`);
-      setSnackSeverity("success");
-      setSnack(true);
-    }
-  };
-
-  // Clear filter function
-  const handleClearFilter = () => {
-    setIsFiltering(false);
-    setFilteredDeliveries([]);
-    setOrigin("");
-    setDestination("");
-    setSnackMessage("Showing all available jobs");
-    setSnackSeverity("info");
-    setSnack(true);
-  };
-
   const handleClaim = async (deliveryId) => {
-    if (!isValidPhone || !user) {
-      setSnackMessage("Please sign in and enter a valid phone number");
-      setSnackSeverity("warning");
-      setSnack(true);
-      return;
-    }
+    if (!isValidPhone || !user) return;
 
     setLoading(true);
     try {
       // First, ensure user exists in MongoDB
-      const userResponse = await fetch('/api/users/create-from-clerk', {
+      await fetch('/api/users/create-from-clerk', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -188,9 +98,6 @@ export default function NewJob() {
           role: 'rider'
         }),
       });
-      
-      const userData = await userResponse.json();
-      console.log('User creation/update response:', userData);
 
       // Claim the package
       const res = await fetch('/api/deliveries/claim', {
@@ -199,22 +106,23 @@ export default function NewJob() {
         body: JSON.stringify({
           commuterId: user.id,
           deliveryId,
-          packageIds: [deliveryId], // Schema requires packageIds array
         }),
       });
 
       const data = await res.json();
-      console.log('Claim response:', data);
       
       if (data.success) {
         setSelectedDelivery(deliveryId);
-        setSnackMessage('Job claimed successfully! 🎉');
+        setSnackMessage('Job claimed successfully!');
         setSnackSeverity('success');
         setSnack(true);
         
-        // Remove claimed delivery from lists
+        // Remove claimed delivery from list
         setDeliveries(prev => prev.filter(d => d._id !== deliveryId));
-        setFilteredDeliveries(prev => prev.filter(d => d._id !== deliveryId));
+        
+        // Refresh markers
+        setShowAllMarkers(false);
+        setTimeout(() => setShowAllMarkers(true), 0);
       } else {
         setSnackMessage(data.error || 'Failed to claim job');
         setSnackSeverity('error');
@@ -230,312 +138,279 @@ export default function NewJob() {
     }
   };
 
-  // Calculate Route (hops + path)
-  const calculateRoute = (originId, destId) => {
-    const start = resolveToStation(originId);
-    const end = resolveToStation(destId);
-    return bfsShortestPath(skytrainGraph, start, end);
+  // Reset open path if claim is removed
+  useEffect(() => {
+    if (!selectedDelivery && openJobId) {
+      setOpenJobId(null);
+    }
+  }, [selectedDelivery]);
+
+  // Helper to get access point by ID
+  const getAccessPointById = (id) => {
+    return accessPoints.find(ap => ap._id === id || ap.id === id);
   };
 
-  // Show all deliveries on map (or filtered ones if filtering is active)
-  const deliveriesToShow = isFiltering && filteredDeliveries.length >= 0 ? filteredDeliveries : deliveries;
-
-  // Markers for all deliveries
-  const allMarkers = useMemo(() => {
-    if (!mounted || deliveriesToShow.length === 0) return [];
+  // MARKERS
+  const markers = useMemo(() => {
+    const showAll = showAllMarkers || !openJobId || selectedDelivery !== openJobId;
     
-    const L = typeof window !== "undefined" ? require("leaflet") : null;
-    if (!L) return [];
+    // Group deliveries by origin access point
+    const pickupPoints = showAll
+      ? Array.from(new Set(availableDeliveries.map(d => d.originAccessPoint)))
+      : [availableDeliveries.find(d => d._id === openJobId)?.originAccessPoint].filter(Boolean);
 
-    console.log('Creating markers for deliveries:', deliveriesToShow.length);
-    const markers = [];
-    deliveriesToShow.forEach((delivery, deliveryIdx) => {
-      const originAP = getAccessPointById(delivery.originAccessPoint);
-      const destAP = getAccessPointById(delivery.destinationAccessPoint);
+    return pickupPoints.map(apId => {
+      if (!apId) return null;
+
+      const ap = getAccessPointById(apId);
+      if (!ap) return null;
+
+      const coords = [ap.lat, ap.lng];
+      if (!coords[0] || !coords[1]) return null;
+
+      const relatedJobs = availableDeliveries.filter(d => d.originAccessPoint === apId);
       
-      const originStation = resolveToStation(delivery.originAccessPoint);
-      const destStation = resolveToStation(delivery.destinationAccessPoint);
-      
-      console.log(`Delivery ${delivery._id}:`, { 
-        originStation, 
-        destStation, 
-        originPos: stationCoords[originStation],
-        destPos: stationCoords[destStation]
-      });
-      
-      const originPos = stationCoords[originStation];
-      const destPos = stationCoords[destStation];
-
-      const isSelected = selectedDelivery === delivery._id;
-      const color = isSelected ? "#3B82F6" : "#9CA3AF";
-
-      if (originPos) {
-        markers.push(
-          <Marker
-            key={`origin-${delivery._id}`}
-            position={originPos}
-            icon={L.divIcon({
-              className: "",
-              html: `<div style="width:${isSelected ? 16 : 12}px;height:${isSelected ? 16 : 12}px;background:${color};border-radius:50%;border:2px solid white;box-shadow:0 2px 4px rgba(0,0,0,0.2);"></div>`,
-            })}
-          />
-        );
-      }
-
-      if (destPos) {
-        markers.push(
-          <Marker
-            key={`dest-${delivery._id}`}
-            position={destPos}
-            icon={L.divIcon({
-              className: "",
-              html: `<div style="width:${isSelected ? 16 : 12}px;height:${isSelected ? 16 : 12}px;background:#EF4444;border-radius:50%;border:2px solid white;box-shadow:0 2px 4px rgba(0,0,0,0.2);"></div>`,
-            })}
-          />
-        );
-      }
-    });
-
-    return markers;
-  }, [deliveriesToShow, selectedDelivery, mounted]);
-
-  // Polylines for all deliveries
-  const allPaths = useMemo(() => {
-    if (!mounted || deliveriesToShow.length === 0) return [];
-
-    return deliveriesToShow.map((delivery) => {
-      const { path } = calculateRoute(delivery.originAccessPoint, delivery.destinationAccessPoint);
-      const pathCoords = path.map(stationId => stationCoords[stationId]).filter(Boolean);
-
-      if (pathCoords.length < 2) return null;
-
-      const isSelected = selectedDelivery === delivery._id;
-      const color = isSelected ? "#3B82F6" : "#D1D5DB";
-      const weight = isSelected ? 4 : 2;
-
       return (
-        <Polyline
-          key={`path-${delivery._id}`}
-          positions={pathCoords}
-          pathOptions={{ color, weight, opacity: isSelected ? 1 : 0.5 }}
-        />
+        <Marker key={apId} position={coords}>
+          <Popup onOpen={() => setOpenJobId(null)}>
+            <Typography variant="subtitle1" fontWeight="bold">{ap.name}</Typography>
+            <Box sx={{ maxHeight: 300, overflowY: 'auto', width: 250 }}>
+              {relatedJobs.map(job => {
+                const originAP = getAccessPointById(job.originAccessPoint);
+                const destAP = getAccessPointById(job.destinationAccessPoint);
+                const dropoffAP = dropOffSelections[job._id] 
+                  ? getAccessPointById(dropOffSelections[job._id]) 
+                  : destAP;
+
+                if (!originAP || !destAP) return null;
+
+                const startStation = originAP.stationId || originAP.nearestStation;
+                const endStation = dropoffAP?.stationId || dropoffAP?.nearestStation || destAP.stationId || destAP.nearestStation;
+                
+                if (!startStation || !endStation) return null;
+
+                const { path } = bfsShortestPath(skytrainGraph, startStation, endStation);
+
+                // Build dropdown path
+                const finalDestStation = destAP.stationId || destAP.nearestStation;
+                const { path: fullPath } = bfsShortestPath(skytrainGraph, startStation, finalDestStation);
+                
+                return (
+                  <Card key={job._id} sx={{ my: 1 }}>
+                    <CardContent sx={{ p: 1.5 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', mb: 0.5, fontSize: '0.9rem' }}>
+                        <Typography variant="body2" component="span" sx={{ mr: 0.5 }}>
+                          From <b>{originAP.name}</b> →
+                        </Typography>
+                        <Select
+                          size="small"
+                          value={dropOffSelections[job._id] || job.destinationAccessPoint}
+                          onChange={e => setDropOffSelections(s => ({ ...s, [job._id]: e.target.value }))}
+                          sx={{ mx: 1, minWidth: 120, background: 'white' }}
+                        >
+                          {fullPath.slice(1).map(stationId => (
+                            <MenuItem key={stationId} value={stationId}>{stationId}</MenuItem>
+                          ))}
+                          <MenuItem value={job.destinationAccessPoint}>{destAP.name} (Final)</MenuItem>
+                        </Select>
+                      </Box>
+                      <Typography variant="body2" sx={{ marginTop: 1 }}>
+                        Hops: {path.length - 1}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Cost: {job.totalCost} points
+                      </Typography>
+                    </CardContent>
+                    <CardActions>
+                      <Button 
+                        size="small" 
+                        variant="contained" 
+                        onClick={() => handleClaim(job._id)} 
+                        disabled={selectedDelivery === job._id || !isValidPhone || loading || !user}
+                      >
+                        {selectedDelivery === job._id ? "Claimed" : "Claim"}
+                      </Button>
+                      <Button size="small" variant="outlined" onClick={() => setOpenJobId(openJobId === job._id ? null : job._id)}>
+                        {openJobId === job._id ? "Hide Path" : "Show Path"}
+                      </Button>
+                    </CardActions>
+                  </Card>
+                );
+              })}
+            </Box>
+          </Popup>
+        </Marker>
       );
     }).filter(Boolean);
-  }, [deliveriesToShow, selectedDelivery]);
+  }, [availableDeliveries, selectedDelivery, openJobId, dropOffSelections, accessPoints, showAllMarkers, isValidPhone, loading, user]);
 
-  return (
-    <div className={`${outfit.className} min-h-screen bg-white`}>
-      {/* --- Fixed Nav Bar --- */}
-      <motion.nav
-        initial={{ y: -50, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        transition={{ duration: 0.4 }}
-        className="fixed top-0 left-0 w-full bg-white/70 backdrop-blur-md shadow-sm border-b border-gray-200 z-50"
-      >
-        <div className="max-w-7xl mx-auto flex items-center justify-between px-6 py-4">
-          <Link href="/dashboard" className="flex items-baseline gap-1">
-            <h1 className="text-2xl font-extrabold text-blue-600">
-              Sky
-              <span className="text-gray-900 transform -rotate-2 inline-block ml-0.5">
-                Drop
-              </span>
-            </h1>
-          </Link>
-          <div className="flex items-center gap-4">
-            <Link
-              href="/dashboard/profile"
-              className="text-gray-700 hover:text-blue-600 font-medium transition"
-            >
-              Profile
-            </Link>
-          </div>
-        </div>
-      </motion.nav>
+  // RENDER PATH
+  const renderPath = () => {
+    if (!openJobId) return null;
+    const L = typeof window !== "undefined" ? require("leaflet") : null;
+    if (!L) return null;
 
-      {/* --- Main Content --- */}
-      <motion.main
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4 }}
-        className="pt-24 flex flex-col items-center text-center px-6 pb-10"
-      >
-      {/* Header */}
-      <h1 className="text-4xl font-extrabold text-gray-900 mb-2">
-        Become a <span className="text-gray-900">Commuter</span>
-      </h1>
-      <p className="text-gray-600 mb-10 max-w-md">
-        Select your route to view available delivery jobs and earn rewards for each trip.
-      </p>
+    const openJob = availableDeliveries.find(j => j._id === openJobId);
+    if (!openJob) return null;
 
+    const startAP = getAccessPointById(openJob.originAccessPoint);
+    const destAP = getAccessPointById(openJob.destinationAccessPoint);
+    const dropoffAP = dropOffSelections[openJob._id] 
+      ? getAccessPointById(dropOffSelections[openJob._id])
+      : destAP;
+
+    if (!startAP || !dropoffAP) return null;
+
+    const startStation = startAP.stationId || startAP.nearestStation;
+    const endStation = dropoffAP.stationId || dropoffAP.nearestStation;
+
+    if (!startStation || !endStation) return null;
+
+    const { path } = bfsShortestPath(skytrainGraph, startStation, endStation);
+
+    const polylineCoords = [];
+    
+    // Add start access point
+    if (startAP.lat && startAP.lng) {
+      polylineCoords.push([startAP.lat, startAP.lng]);
+    }
+    
+    // Add start station
+    if (stationCoords[startStation]) {
+      polylineCoords.push(stationCoords[startStation]);
+    }
+    
+    // Add intermediate stations
+    for (let i = 1; i < path.length - 1; i++) {
+      if (stationCoords[path[i]]) {
+        polylineCoords.push(stationCoords[path[i]]);
+      }
+    }
+    
+    // Add end station
+    if (stationCoords[endStation]) {
+      polylineCoords.push(stationCoords[endStation]);
+    }
+    
+    // Add dropoff access point
+    if (dropoffAP.lat && dropoffAP.lng) {
+      polylineCoords.push([dropoffAP.lat, dropoffAP.lng]);
+    }
+
+    // Only render if we have at least 2 coordinates
+    if (polylineCoords.length < 2) return null;
+
+    const markersArr = [];
+    markersArr.push(<Marker key="startAP" position={[startAP.lat, startAP.lng]} icon={L.icon({ iconUrl: '/marker-icon.png', iconSize: [25, 41], iconAnchor: [12.5, 41] })} interactive={false} />);
+    markersArr.push(<Marker key="endAP" position={[dropoffAP.lat, dropoffAP.lng]} icon={L.icon({ iconUrl: '/red-pin.png', iconSize: [25, 41], iconAnchor: [12.5, 41] })} interactive={false} />);
+
+    for (let i = 0; i < path.length; i++) {
+      const station = path[i];
+      if (stationCoords[station]) {
+        markersArr.push(
+          <Marker
+            key={"dot-" + station + i}
+            position={stationCoords[station]}
+            icon={L.divIcon({ className: "", html: '<div style="width:12px;height:12px;background:#888;border-radius:50%;border:2px solid #fff;"></div>' })}
+            interactive={false}
+          />
+        );
+      }
+    }
+
+    return <>
+      <Polyline positions={polylineCoords} pathOptions={{ color: 'blue', weight: 4 }} />
+      {markersArr}
+    </>;
+  };
+
+  const JobList = (
+    <Box sx={{ width: 280, p: 2 }}>
+      <Typography variant="h6" sx={{ mb: 2 }}>Available Jobs</Typography>
       {!user && (
-        <Alert severity="info" className="mb-6 max-w-md">
+        <Alert severity="info" sx={{ mb: 2 }}>
           Please sign in to claim jobs
         </Alert>
       )}
+      <TextField
+        label="Your Phone Number"
+        value={phone}
+        onChange={e => setPhone(e.target.value)}
+        fullWidth
+        placeholder="e.g. 6041234567"
+        error={phone.length > 0 && !isValidPhone}
+        helperText={!isValidPhone && phone.length > 0 ? "Enter a valid 10-digit phone number" : ""}
+        sx={{ mb: 2 }}
+      />
+      <List>
+        {availableDeliveries.length === 0 ? (
+          <ListItem><ListItemText primary="No jobs available" /></ListItem>
+        ) : (
+          availableDeliveries.map(delivery => {
+            const originAP = getAccessPointById(delivery.originAccessPoint);
+            const destAP = getAccessPointById(delivery.destinationAccessPoint);
+            
+            if (!originAP || !destAP) return null;
 
-      {/* Phone Number Input */}
-      {mounted && (
-        <div className="w-full max-w-md mb-6">
-          <TextField
-            label="Your Phone Number"
-            value={phone}
-            onChange={e => setPhone(e.target.value)}
-            fullWidth
-            placeholder="e.g. 6041234567"
-            error={phone.length > 0 && !isValidPhone}
-            helperText={!isValidPhone && phone.length > 0 ? "Enter a valid 10-digit phone number" : ""}
-          />
-        </div>
-      )}
+            const startStation = originAP.stationId || originAP.nearestStation;
+            const endStation = destAP.stationId || destAP.nearestStation;
 
-      {/* Origin / Destination Selection */}
-      {mounted && (
-        <div className="w-full max-w-md mb-8 flex flex-col gap-4">
-        <Autocomplete
-          options={allOptions}
-          getOptionLabel={(option) => option.label}
-          getOptionKey={(option) => option.id}
-          onChange={(_, newValue) => setOrigin(newValue?.value || "")}
-          renderInput={(params) => <TextField {...params} label="Origin (Access Point or Station)" required />}
-        />
+            if (!startStation || !endStation) return null;
 
-        <Autocomplete
-          options={allOptions}
-          getOptionLabel={(option) => option.label}
-          getOptionKey={(option) => option.id}
-          onChange={(_, newValue) => setDestination(newValue?.value || "")}
-          renderInput={(params) => <TextField {...params} label="Destination (Access Point or Station)" required />}
-        />
+            const hops = bfsShortestPath(skytrainGraph, startStation, endStation).hops;
 
-        {/* Filter Mode Toggle */}
-        <div className="flex gap-2 p-1 bg-gray-100 rounded-full">
-          <button
-            type="button"
-            onClick={() => setFilterMode("exact")}
-            className={`flex-1 py-2 px-4 rounded-full font-medium transition ${
-              filterMode === "exact"
-                ? "bg-white text-gray-900 shadow-sm"
-                : "text-gray-600 hover:text-gray-900"
-            }`}
-          >
-            Exact Route
-          </button>
-          <button
-            type="button"
-            onClick={() => setFilterMode("along-route")}
-            className={`flex-1 py-2 px-4 rounded-full font-medium transition ${
-              filterMode === "along-route"
-                ? "bg-white text-gray-900 shadow-sm"
-                : "text-gray-600 hover:text-gray-900"
-            }`}
-          >
-            Along Route
-          </button>
-        </div>
-
-        <button
-          onClick={handleFilterJobs}
-          className="mt-3 py-3 bg-gray-900 hover:bg-black text-white font-semibold rounded-full shadow-md transition"
-        >
-          Find Jobs
-        </button>
-        
-        {isFiltering && (
-          <button
-            onClick={handleClearFilter}
-            className="py-2 border-2 border-gray-300 hover:border-gray-400 text-gray-700 font-semibold rounded-full transition"
-          >
-            Clear Filter & Show All
-          </button>
+            return (
+              <ListItem key={delivery._id} divider alignItems="flex-start">
+                <Box sx={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: "center" }}>
+                  <Box>
+                    <Typography variant="body1">
+                      From: {originAP.name} → {destAP.name}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Hops: {hops}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Pay: {delivery.totalCost} points
+                    </Typography>
+                  </Box>
+                  <Button 
+                    size="small" 
+                    sx={{ height: "50%" }} 
+                    variant="contained" 
+                    onClick={() => handleClaim(delivery._id)} 
+                    disabled={selectedDelivery === delivery._id || !isValidPhone || loading || !user}
+                  >
+                    {selectedDelivery === delivery._id ? "Claimed" : "Claim"}
+                  </Button>
+                </Box>
+              </ListItem>
+            );
+          })
         )}
-      </div>
-      )}
-
-      {/* Map Visualization - Always Visible */}
-      <div className="w-full max-w-5xl mb-10 rounded-xl overflow-hidden border border-gray-200 shadow-md">
-        <MapContainer
-          center={[49.25, -123.1]}
-          zoom={11}
-          scrollWheelZoom={false}
-          style={{ height: "500px", width: "100%" }}
-        >
-          <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-          {allPaths}
-          {allMarkers}
-        </MapContainer>
-      </div>
-
-      {/* Available Jobs */}
-      {deliveriesToShow.length > 0 && (
-        <div className="w-full max-w-5xl mb-10">
-          <p className="text-lg font-semibold text-gray-800 mb-4">
-            {isFiltering 
-              ? `Filtered Jobs ${filterMode === "exact" ? "for this route" : "along your route"} (${deliveriesToShow.length})`
-              : `All Available Jobs (${deliveriesToShow.length})`
-            }
-          </p>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {deliveriesToShow.map((delivery) => {
-              const originAP = getAccessPointById(delivery.originAccessPoint);
-              const destAP = getAccessPointById(delivery.destinationAccessPoint);
-              const { hops } = calculateRoute(delivery.originAccessPoint, delivery.destinationAccessPoint);
-
-              return (
-                <Card
-                  key={delivery._id}
-                  onClick={() => setSelectedDelivery(delivery._id)}
-                  className={`cursor-pointer transition-all ${
-                    selectedDelivery === delivery._id
-                      ? "border-2 border-blue-600 bg-blue-50"
-                      : "border border-gray-200 hover:border-gray-400"
-                  }`}
-                  sx={{ borderRadius: 4 }}
-                >
-                  <CardContent>
-                    <Typography variant="h6" fontWeight="bold" gutterBottom>
-                      {originAP?.name || 'Origin'} → {destAP?.name || 'Destination'}
-                    </Typography>
-                    <Typography color="text.secondary" variant="body2">
-                      Hops: <span className="font-semibold">{hops}</span>
-                    </Typography>
-                    <Typography color="text.secondary" variant="body2">
-                      Reward:{" "}
-                      <span className="font-semibold text-blue-600">
-                        {delivery.totalCost} pts
-                      </span>
-                    </Typography>
-                  </CardContent>
-                  <CardActions>
-                    <Button
-                      size="small"
-                      variant="contained"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleClaim(delivery._id);
-                      }}
-                      disabled={loading || !isValidPhone || !user}
-                      sx={{
-                        bgcolor: '#111',
-                        '&:hover': { bgcolor: '#000' }
-                      }}
-                    >
-                      {loading ? "Claiming..." : "Claim Job"}
-                    </Button>
-                  </CardActions>
-                </Card>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Snackbar Notification */}
-      <Snackbar open={snack} autoHideDuration={3000} onClose={() => setSnack(false)}>
-        <Alert severity={snackSeverity} sx={{ width: "100%" }}>
-          {snackMessage}
-        </Alert>
-      </Snackbar>
-      </motion.main>
-    </div>
+      </List>
+    </Box>
   );
-}
+
+  return (
+    <Box sx={{ display: "flex", flexDirection: isMobile ? "column" : "row", height: "100vh" }}>
+      {isMobile ? <>
+        <IconButton onClick={() => setDrawerOpen(true)} sx={{ position: "absolute", top: 10, right: 10, zIndex: 1000, bgcolor: "white" }}><MenuIcon /></IconButton>
+        <Drawer anchor="right" open={drawerOpen} onClose={() => setDrawerOpen(false)}>{JobList}</Drawer>
+      </> : <Box sx={{ flexShrink: 0, width: 300, borderRight: "1px solid #ddd", height: "100%", overflowY: "auto", bgcolor: "#fafafa" }}>{JobList}</Box>}
+
+      <Box sx={{ flexGrow: 1, position: 'relative' }}>
+        <MapContainer center={[49.25, -123.1]} zoom={11} scrollWheelZoom style={{ height: "100%", width: "100%" }}>
+          <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution="&copy; OpenStreetMap contributors" />
+          {markers}
+          {renderPath()}
+        </MapContainer>
+      </Box>
+
+      <Snackbar open={snack} autoHideDuration={3000} onClose={() => setSnack(false)}>
+        <Alert severity={snackSeverity} sx={{ width: "100%" }}>{snackMessage}</Alert>
+      </Snackbar>
+    </Box>
+  );
+};
+
+export default NewJob;
