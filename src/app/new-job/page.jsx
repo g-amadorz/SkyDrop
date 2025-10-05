@@ -1,13 +1,10 @@
 "use client";
-import React, { useState, useMemo, useEffect } from "react";
-import {
-  Box, TextField, Button, Typography, Drawer, IconButton, List,
-  ListItem, ListItemText, Snackbar, Alert, Card, CardContent, CardActions,
-  Select, MenuItem
-} from "@mui/material";
-import MenuIcon from "@mui/icons-material/Menu";
-import CloseIcon from "@mui/icons-material/Close";
+
+import { useState, useMemo, useEffect } from "react";
 import dynamic from "next/dynamic";
+import { motion } from "framer-motion";
+import { Outfit } from "next/font/google";
+import { TextField, Autocomplete, Snackbar, Alert, Typography, Card, CardContent, CardActions, Button } from "@mui/material";
 import { useUser } from "@clerk/nextjs";
 import { useAccesspoint } from "../contexts/AccesspointContext";
 import "leaflet/dist/leaflet.css";
@@ -18,12 +15,16 @@ import { stationCoords, bfsShortestPath, skytrainGraph } from "../compute/CalcHo
 const MapContainer = dynamic(() => import("react-leaflet").then(mod => mod.MapContainer), { ssr: false });
 const TileLayer = dynamic(() => import("react-leaflet").then(mod => mod.TileLayer), { ssr: false });
 const Marker = dynamic(() => import("react-leaflet").then(mod => mod.Marker), { ssr: false });
-const Popup = dynamic(() => import("react-leaflet").then(mod => mod.Popup), { ssr: false });
 const Polyline = dynamic(() => import("react-leaflet").then(mod => mod.Polyline), { ssr: false });
 
-const NewJob = () => {
+const outfit = Outfit({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+});
+
+export default function NewJob() {
   const { user } = useUser();
-  const { accessPoints } = useAccesspoint ? useAccesspoint() : { accessPoints: [] };
+  const { accessPoints } = useAccesspoint();
 
   const [deliveries, setDeliveries] = useState([]);
   const [phone, setPhone] = useState("");
@@ -31,12 +32,10 @@ const NewJob = () => {
   const [snack, setSnack] = useState(false);
   const [snackMessage, setSnackMessage] = useState("");
   const [snackSeverity, setSnackSeverity] = useState("success");
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const [dropOffSelections, setDropOffSelections] = useState({});
-  const [openJobId, setOpenJobId] = useState(null);
-  const [isMobile, setIsMobile] = useState(false);
-  const [showAllMarkers, setShowAllMarkers] = useState(true);
   const [loading, setLoading] = useState(false);
+  const [origin, setOrigin] = useState("");
+  const [destination, setDestination] = useState("");
+  const [filteredDeliveries, setFilteredDeliveries] = useState([]);
 
   // Leaflet icons setup
   useEffect(() => {
@@ -50,14 +49,6 @@ const NewJob = () => {
         });
       });
     }
-  }, []);
-
-  // Mobile media query
-  useEffect(() => {
-    const check = () => setIsMobile(window.matchMedia("(max-width:900px)").matches);
-    check();
-    window.addEventListener('resize', check);
-    return () => window.removeEventListener('resize', check);
   }, []);
 
   // Fetch available deliveries
@@ -80,11 +71,73 @@ const NewJob = () => {
     return () => clearInterval(interval);
   }, []);
 
-  const availableDeliveries = deliveries;
+  // Combine Access Points + Stations for autocomplete
+  const accessPointOptions =
+    accessPoints?.map((ap) => ({
+      label: `${ap.name} (Access Point)`,
+      value: ap._id || ap.id,
+      name: ap.name,
+      nearestStation: ap.stationId || ap.nearestStation,
+    })) || [];
+
+  const stationOptions = Object.keys(skytrainGraph).map((station) => ({
+    label: `${station} (Station)`,
+    value: station,
+    name: station,
+  }));
+
+  const allOptions = [...accessPointOptions, ...stationOptions];
+
   const isValidPhone = /^\d{10}$/.test(phone);
 
+  // Helper to get access point by ID
+  const getAccessPointById = (id) => {
+    return accessPoints?.find(ap => ap._id === id || ap.id === id);
+  };
+
+  // Helper: AccessPoint ID → Station
+  const resolveToStation = (accessPointId) => {
+    const ap = getAccessPointById(accessPointId);
+    return ap?.stationId || ap?.nearestStation || accessPointId;
+  };
+
+  // Filter deliveries based on origin/destination selection
+  const handleFilterJobs = () => {
+    if (!origin || !destination) {
+      setSnackMessage("Please select both origin and destination");
+      setSnackSeverity("warning");
+      setSnack(true);
+      return;
+    }
+
+    const filtered = deliveries.filter((delivery) => {
+      const deliveryOrigin = resolveToStation(delivery.originAccessPoint);
+      const deliveryDest = resolveToStation(delivery.destinationAccessPoint);
+      const selectedOrigin = origin.includes('(Station)') ? origin.split(' (')[0] : resolveToStation(origin);
+      const selectedDest = destination.includes('(Station)') ? destination.split(' (')[0] : resolveToStation(destination);
+
+      return deliveryOrigin === selectedOrigin && deliveryDest === selectedDest;
+    });
+
+    setFilteredDeliveries(filtered);
+    if (filtered.length === 0) {
+      setSnackMessage("No jobs found for this route");
+      setSnackSeverity("info");
+      setSnack(true);
+    } else {
+      setSnackMessage(`Found ${filtered.length} job(s) for this route!`);
+      setSnackSeverity("success");
+      setSnack(true);
+    }
+  };
+
   const handleClaim = async (deliveryId) => {
-    if (!isValidPhone || !user) return;
+    if (!isValidPhone || !user) {
+      setSnackMessage("Please sign in and enter a valid phone number");
+      setSnackSeverity("warning");
+      setSnack(true);
+      return;
+    }
 
     setLoading(true);
     try {
@@ -113,16 +166,13 @@ const NewJob = () => {
       
       if (data.success) {
         setSelectedDelivery(deliveryId);
-        setSnackMessage('Job claimed successfully!');
+        setSnackMessage('Job claimed successfully! 🎉');
         setSnackSeverity('success');
         setSnack(true);
         
-        // Remove claimed delivery from list
+        // Remove claimed delivery from lists
         setDeliveries(prev => prev.filter(d => d._id !== deliveryId));
-        
-        // Refresh markers
-        setShowAllMarkers(false);
-        setTimeout(() => setShowAllMarkers(true), 0);
+        setFilteredDeliveries(prev => prev.filter(d => d._id !== deliveryId));
       } else {
         setSnackMessage(data.error || 'Failed to claim job');
         setSnackSeverity('error');
@@ -138,279 +188,204 @@ const NewJob = () => {
     }
   };
 
-  // Reset open path if claim is removed
-  useEffect(() => {
-    if (!selectedDelivery && openJobId) {
-      setOpenJobId(null);
-    }
-  }, [selectedDelivery]);
-
-  // Helper to get access point by ID
-  const getAccessPointById = (id) => {
-    return accessPoints.find(ap => ap._id === id || ap.id === id);
+  // Calculate Route (hops + path)
+  const calculateRoute = (originId, destId) => {
+    const start = resolveToStation(originId);
+    const end = resolveToStation(destId);
+    return bfsShortestPath(skytrainGraph, start, end);
   };
 
-  // MARKERS
+  // Animated Markers for Selected Delivery
   const markers = useMemo(() => {
-    const showAll = showAllMarkers || !openJobId || selectedDelivery !== openJobId;
+    if (!selectedDelivery) return [];
     
-    // Group deliveries by origin access point
-    const pickupPoints = showAll
-      ? Array.from(new Set(availableDeliveries.map(d => d.originAccessPoint)))
-      : [availableDeliveries.find(d => d._id === openJobId)?.originAccessPoint].filter(Boolean);
+    const delivery = filteredDeliveries.find(d => d._id === selectedDelivery);
+    if (!delivery) return [];
 
-    return pickupPoints.map(apId => {
-      if (!apId) return null;
+    const { path } = calculateRoute(delivery.originAccessPoint, delivery.destinationAccessPoint);
+    const L = typeof window !== "undefined" ? require("leaflet") : null;
+    if (!L) return [];
 
-      const ap = getAccessPointById(apId);
-      if (!ap) return null;
+    return path.map((stationId, idx) => {
+      const pos = stationCoords[stationId];
+      if (!pos) return null;
 
-      const coords = [ap.lat, ap.lng];
-      if (!coords[0] || !coords[1]) return null;
-
-      const relatedJobs = availableDeliveries.filter(d => d.originAccessPoint === apId);
-      
       return (
-        <Marker key={apId} position={coords}>
-          <Popup onOpen={() => setOpenJobId(null)}>
-            <Typography variant="subtitle1" fontWeight="bold">{ap.name}</Typography>
-            <Box sx={{ maxHeight: 300, overflowY: 'auto', width: 250 }}>
-              {relatedJobs.map(job => {
-                const originAP = getAccessPointById(job.originAccessPoint);
-                const destAP = getAccessPointById(job.destinationAccessPoint);
-                const dropoffAP = dropOffSelections[job._id] 
-                  ? getAccessPointById(dropOffSelections[job._id]) 
-                  : destAP;
-
-                if (!originAP || !destAP) return null;
-
-                const startStation = originAP.stationId || originAP.nearestStation;
-                const endStation = dropoffAP?.stationId || dropoffAP?.nearestStation || destAP.stationId || destAP.nearestStation;
-                
-                if (!startStation || !endStation) return null;
-
-                const { path } = bfsShortestPath(skytrainGraph, startStation, endStation);
-
-                // Build dropdown path
-                const finalDestStation = destAP.stationId || destAP.nearestStation;
-                const { path: fullPath } = bfsShortestPath(skytrainGraph, startStation, finalDestStation);
-                
-                return (
-                  <Card key={job._id} sx={{ my: 1 }}>
-                    <CardContent sx={{ p: 1.5 }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', mb: 0.5, fontSize: '0.9rem' }}>
-                        <Typography variant="body2" component="span" sx={{ mr: 0.5 }}>
-                          From <b>{originAP.name}</b> →
-                        </Typography>
-                        <Select
-                          size="small"
-                          value={dropOffSelections[job._id] || job.destinationAccessPoint}
-                          onChange={e => setDropOffSelections(s => ({ ...s, [job._id]: e.target.value }))}
-                          sx={{ mx: 1, minWidth: 120, background: 'white' }}
-                        >
-                          {fullPath.slice(1).map(stationId => (
-                            <MenuItem key={stationId} value={stationId}>{stationId}</MenuItem>
-                          ))}
-                          <MenuItem value={job.destinationAccessPoint}>{destAP.name} (Final)</MenuItem>
-                        </Select>
-                      </Box>
-                      <Typography variant="body2" sx={{ marginTop: 1 }}>
-                        Hops: {path.length - 1}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        Cost: {job.totalCost} points
-                      </Typography>
-                    </CardContent>
-                    <CardActions>
-                      <Button 
-                        size="small" 
-                        variant="contained" 
-                        onClick={() => handleClaim(job._id)} 
-                        disabled={selectedDelivery === job._id || !isValidPhone || loading || !user}
-                      >
-                        {selectedDelivery === job._id ? "Claimed" : "Claim"}
-                      </Button>
-                      <Button size="small" variant="outlined" onClick={() => setOpenJobId(openJobId === job._id ? null : job._id)}>
-                        {openJobId === job._id ? "Hide Path" : "Show Path"}
-                      </Button>
-                    </CardActions>
-                  </Card>
-                );
-              })}
-            </Box>
-          </Popup>
-        </Marker>
+        <Marker
+          key={`marker-${idx}`}
+          position={pos}
+          icon={L.divIcon({
+            className: "",
+            html: `<div style="width:14px;height:14px;background:${
+              idx === 0 ? "#3B82F6" : idx === path.length - 1 ? "#EF4444" : "#555"
+            };border-radius:50%;border:2px solid white;"></div>`,
+          })}
+        />
       );
     }).filter(Boolean);
-  }, [availableDeliveries, selectedDelivery, openJobId, dropOffSelections, accessPoints, showAllMarkers, isValidPhone, loading, user]);
+  }, [selectedDelivery, filteredDeliveries]);
 
-  // RENDER PATH
+  // Polyline for Selected Delivery
   const renderPath = () => {
-    if (!openJobId) return null;
-    const L = typeof window !== "undefined" ? require("leaflet") : null;
-    if (!L) return null;
-
-    const openJob = availableDeliveries.find(j => j._id === openJobId);
-    if (!openJob) return null;
-
-    const startAP = getAccessPointById(openJob.originAccessPoint);
-    const destAP = getAccessPointById(openJob.destinationAccessPoint);
-    const dropoffAP = dropOffSelections[openJob._id] 
-      ? getAccessPointById(dropOffSelections[openJob._id])
-      : destAP;
-
-    if (!startAP || !dropoffAP) return null;
-
-    const startStation = startAP.stationId || startAP.nearestStation;
-    const endStation = dropoffAP.stationId || dropoffAP.nearestStation;
-
-    if (!startStation || !endStation) return null;
-
-    const { path } = bfsShortestPath(skytrainGraph, startStation, endStation);
-
-    const polylineCoords = [];
+    if (!selectedDelivery) return null;
     
-    // Add start access point
-    if (startAP.lat && startAP.lng) {
-      polylineCoords.push([startAP.lat, startAP.lng]);
-    }
-    
-    // Add start station
-    if (stationCoords[startStation]) {
-      polylineCoords.push(stationCoords[startStation]);
-    }
-    
-    // Add intermediate stations
-    for (let i = 1; i < path.length - 1; i++) {
-      if (stationCoords[path[i]]) {
-        polylineCoords.push(stationCoords[path[i]]);
-      }
-    }
-    
-    // Add end station
-    if (stationCoords[endStation]) {
-      polylineCoords.push(stationCoords[endStation]);
-    }
-    
-    // Add dropoff access point
-    if (dropoffAP.lat && dropoffAP.lng) {
-      polylineCoords.push([dropoffAP.lat, dropoffAP.lng]);
-    }
+    const delivery = filteredDeliveries.find(d => d._id === selectedDelivery);
+    if (!delivery) return null;
 
-    // Only render if we have at least 2 coordinates
-    if (polylineCoords.length < 2) return null;
+    const { path } = calculateRoute(delivery.originAccessPoint, delivery.destinationAccessPoint);
+    const pathCoords = path.map(stationId => stationCoords[stationId]).filter(Boolean);
 
-    const markersArr = [];
-    markersArr.push(<Marker key="startAP" position={[startAP.lat, startAP.lng]} icon={L.icon({ iconUrl: '/marker-icon.png', iconSize: [25, 41], iconAnchor: [12.5, 41] })} interactive={false} />);
-    markersArr.push(<Marker key="endAP" position={[dropoffAP.lat, dropoffAP.lng]} icon={L.icon({ iconUrl: '/red-pin.png', iconSize: [25, 41], iconAnchor: [12.5, 41] })} interactive={false} />);
+    if (pathCoords.length < 2) return null;
 
-    for (let i = 0; i < path.length; i++) {
-      const station = path[i];
-      if (stationCoords[station]) {
-        markersArr.push(
-          <Marker
-            key={"dot-" + station + i}
-            position={stationCoords[station]}
-            icon={L.divIcon({ className: "", html: '<div style="width:12px;height:12px;background:#888;border-radius:50%;border:2px solid #fff;"></div>' })}
-            interactive={false}
-          />
-        );
-      }
-    }
-
-    return <>
-      <Polyline positions={polylineCoords} pathOptions={{ color: 'blue', weight: 4 }} />
-      {markersArr}
-    </>;
+    return (
+      <Polyline
+        positions={pathCoords}
+        pathOptions={{ color: "#3B82F6", weight: 4 }}
+      />
+    );
   };
 
-  const JobList = (
-    <Box sx={{ width: 280, p: 2 }}>
-      <Typography variant="h6" sx={{ mb: 2 }}>Available Jobs</Typography>
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4 }}
+      className={`${outfit.className} flex flex-col items-center text-center px-6 pt-6 pb-10 bg-white min-h-screen`}
+    >
+      {/* Header */}
+      <h1 className="text-4xl font-extrabold text-gray-900 mb-2">
+        Become a <span className="text-gray-900">Commuter</span>
+      </h1>
+      <p className="text-gray-600 mb-10 max-w-md">
+        Select your route to view available delivery jobs and earn rewards for each trip.
+      </p>
+
       {!user && (
-        <Alert severity="info" sx={{ mb: 2 }}>
+        <Alert severity="info" className="mb-6 max-w-md">
           Please sign in to claim jobs
         </Alert>
       )}
-      <TextField
-        label="Your Phone Number"
-        value={phone}
-        onChange={e => setPhone(e.target.value)}
-        fullWidth
-        placeholder="e.g. 6041234567"
-        error={phone.length > 0 && !isValidPhone}
-        helperText={!isValidPhone && phone.length > 0 ? "Enter a valid 10-digit phone number" : ""}
-        sx={{ mb: 2 }}
-      />
-      <List>
-        {availableDeliveries.length === 0 ? (
-          <ListItem><ListItemText primary="No jobs available" /></ListItem>
-        ) : (
-          availableDeliveries.map(delivery => {
-            const originAP = getAccessPointById(delivery.originAccessPoint);
-            const destAP = getAccessPointById(delivery.destinationAccessPoint);
-            
-            if (!originAP || !destAP) return null;
 
-            const startStation = originAP.stationId || originAP.nearestStation;
-            const endStation = destAP.stationId || destAP.nearestStation;
+      {/* Phone Number Input */}
+      <div className="w-full max-w-md mb-6">
+        <TextField
+          label="Your Phone Number"
+          value={phone}
+          onChange={e => setPhone(e.target.value)}
+          fullWidth
+          placeholder="e.g. 6041234567"
+          error={phone.length > 0 && !isValidPhone}
+          helperText={!isValidPhone && phone.length > 0 ? "Enter a valid 10-digit phone number" : ""}
+        />
+      </div>
 
-            if (!startStation || !endStation) return null;
+      {/* Origin / Destination Selection */}
+      <div className="w-full max-w-md mb-8 flex flex-col gap-4">
+        <Autocomplete
+          options={allOptions}
+          getOptionLabel={(option) => option.label}
+          onChange={(_, newValue) => setOrigin(newValue?.value || "")}
+          renderInput={(params) => <TextField {...params} label="Origin (Access Point or Station)" required />}
+        />
 
-            const hops = bfsShortestPath(skytrainGraph, startStation, endStation).hops;
+        <Autocomplete
+          options={allOptions}
+          getOptionLabel={(option) => option.label}
+          onChange={(_, newValue) => setDestination(newValue?.value || "")}
+          renderInput={(params) => <TextField {...params} label="Destination (Access Point or Station)" required />}
+        />
 
-            return (
-              <ListItem key={delivery._id} divider alignItems="flex-start">
-                <Box sx={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: "center" }}>
-                  <Box>
-                    <Typography variant="body1">
-                      From: {originAP.name} → {destAP.name}
+        <button
+          onClick={handleFilterJobs}
+          className="mt-3 py-3 bg-gray-900 hover:bg-black text-white font-semibold rounded-full shadow-md transition"
+        >
+          Find Jobs
+        </button>
+      </div>
+
+      {/* Available Jobs */}
+      {filteredDeliveries.length > 0 && (
+        <div className="w-full max-w-3xl mb-10">
+          <p className="text-lg font-semibold text-gray-800 mb-4">
+            Available Jobs for this route:
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {filteredDeliveries.map((delivery) => {
+              const originAP = getAccessPointById(delivery.originAccessPoint);
+              const destAP = getAccessPointById(delivery.destinationAccessPoint);
+              const { hops } = calculateRoute(delivery.originAccessPoint, delivery.destinationAccessPoint);
+
+              return (
+                <Card
+                  key={delivery._id}
+                  onClick={() => setSelectedDelivery(delivery._id)}
+                  className={`cursor-pointer transition-all ${
+                    selectedDelivery === delivery._id
+                      ? "border-2 border-gray-900 bg-gray-50"
+                      : "border border-gray-200 hover:border-gray-400"
+                  }`}
+                  sx={{ borderRadius: 4 }}
+                >
+                  <CardContent>
+                    <Typography variant="h6" fontWeight="bold" gutterBottom>
+                      {originAP?.name || 'Origin'} → {destAP?.name || 'Destination'}
                     </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      Hops: {hops}
+                    <Typography color="text.secondary" variant="body2">
+                      Hops: <span className="font-semibold">{hops}</span>
                     </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      Pay: {delivery.totalCost} points
+                    <Typography color="text.secondary" variant="body2">
+                      Reward:{" "}
+                      <span className="font-semibold text-gray-900">
+                        {delivery.totalCost} pts
+                      </span>
                     </Typography>
-                  </Box>
-                  <Button 
-                    size="small" 
-                    sx={{ height: "50%" }} 
-                    variant="contained" 
-                    onClick={() => handleClaim(delivery._id)} 
-                    disabled={selectedDelivery === delivery._id || !isValidPhone || loading || !user}
-                  >
-                    {selectedDelivery === delivery._id ? "Claimed" : "Claim"}
-                  </Button>
-                </Box>
-              </ListItem>
-            );
-          })
-        )}
-      </List>
-    </Box>
-  );
+                  </CardContent>
+                  <CardActions>
+                    <Button
+                      size="small"
+                      variant="contained"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleClaim(delivery._id);
+                      }}
+                      disabled={loading || !isValidPhone || !user}
+                      sx={{
+                        bgcolor: '#111',
+                        '&:hover': { bgcolor: '#000' }
+                      }}
+                    >
+                      {loading ? "Claiming..." : "Claim Job"}
+                    </Button>
+                  </CardActions>
+                </Card>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
-  return (
-    <Box sx={{ display: "flex", flexDirection: isMobile ? "column" : "row", height: "100vh" }}>
-      {isMobile ? <>
-        <IconButton onClick={() => setDrawerOpen(true)} sx={{ position: "absolute", top: 10, right: 10, zIndex: 1000, bgcolor: "white" }}><MenuIcon /></IconButton>
-        <Drawer anchor="right" open={drawerOpen} onClose={() => setDrawerOpen(false)}>{JobList}</Drawer>
-      </> : <Box sx={{ flexShrink: 0, width: 300, borderRight: "1px solid #ddd", height: "100%", overflowY: "auto", bgcolor: "#fafafa" }}>{JobList}</Box>}
+      {/* Map Visualization */}
+      {selectedDelivery && (
+        <div className="w-full max-w-3xl rounded-xl overflow-hidden border border-gray-200 shadow-md">
+          <MapContainer
+            center={[49.25, -123.1]}
+            zoom={11}
+            scrollWheelZoom={false}
+            style={{ height: "420px", width: "100%" }}
+          >
+            <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+            {markers}
+            {renderPath()}
+          </MapContainer>
+        </div>
+      )}
 
-      <Box sx={{ flexGrow: 1, position: 'relative' }}>
-        <MapContainer center={[49.25, -123.1]} zoom={11} scrollWheelZoom style={{ height: "100%", width: "100%" }}>
-          <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution="&copy; OpenStreetMap contributors" />
-          {markers}
-          {renderPath()}
-        </MapContainer>
-      </Box>
-
+      {/* Snackbar Notification */}
       <Snackbar open={snack} autoHideDuration={3000} onClose={() => setSnack(false)}>
-        <Alert severity={snackSeverity} sx={{ width: "100%" }}>{snackMessage}</Alert>
+        <Alert severity={snackSeverity} sx={{ width: "100%" }}>
+          {snackMessage}
+        </Alert>
       </Snackbar>
-    </Box>
+    </motion.div>
   );
-};
-
-export default NewJob;
+}
