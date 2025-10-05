@@ -19,6 +19,7 @@ const ShipperSchema: Schema<IShipper> = new Schema({
     
 })
 
+
 const Shipper: Model<IShipper> = mongoose.model<IShipper>('Shipper', ShipperSchema);
 
 export default Shipper;
