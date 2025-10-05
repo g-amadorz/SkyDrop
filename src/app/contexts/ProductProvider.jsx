@@ -61,10 +61,27 @@ export const ProductProvider = ({ children }) => {
         }
     }, [products, dataLoaded]);
 
+
+    // Associate a commuter phone number with a product by id
+    const setCommuter = (productId, phoneNumber) => {
+        setProducts(prevProducts => prevProducts.map(p =>
+            p.id === productId ? { ...p, commuterPN: phoneNumber } : p
+        ));
+    };
+
+    // Update the location (currApId, destApId) for a product by id
+    const setLocation = (productId, currApId, destApId) => {
+        setProducts(prevProducts => prevProducts.map(p =>
+            p.id === productId ? { ...p, currApId, destApId } : p
+        ));
+    };
+
     const value = {
         products,
         create,
         get,
+        setCommuter,
+        setLocation,
     }
 
     return (
