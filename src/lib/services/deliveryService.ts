@@ -21,20 +21,12 @@ export default class DeliveryService {
 
     // 1. INITIATION (Shipper creates delivery)
     async initiateDelivery(shipperId: string, deliveryData: InitiateDeliveryInput) {
-        // - Verify shipper exists and has 'sender' role // Done
-        // - Check shipper has sufficient points // Done
-        // - Calculate estimated cost // Done
-        // - Create delivery record // Done
-        // - Update product status to 'awaiting-pickup' // Done
-        // - Generate recipient verification code
-        // - Return delivery with tracking info // Done
-        
         const shipper = await this.userService.findUserById(shipperId);
         if (!shipper) {
             throw new Error('Shipper not found');
         }
 
-        if (shipper.role !== 'sender') {
+        if (shipper.role !== 'sender' && shipper.role !== 'admin') {
             throw new Error('User must have sender role');
         }
 
@@ -43,33 +35,60 @@ export default class DeliveryService {
             throw new Error('Product not found');
         }
 
-        const totalDeliveryCost = await this.calculateDeliveryCost(deliveryData.originAccessPoint, deliveryData.destinationAccessPoint);
+        // Calculate estimated cost and distance
+        const totalDeliveryCost = await this.calculateDeliveryCost(
+            deliveryData.originAccessPoint, 
+            deliveryData.destinationAccessPoint
+        );
         
-        // TODO: Implement validateShipperBalance error handling
-        try {
-            this.validateShipperBalance(shipperId, totalDeliveryCost)
-        } catch (error) {
-            throw error;
-        }
+        const { calculateStationDistance: calcDistance } = await import('@/lib/data/skytrainNetwork');
+        const originAP = await this.accessPointService.findAccessPointById(deliveryData.originAccessPoint);
+        const destAP = await this.accessPointService.findAccessPointById(deliveryData.destinationAccessPoint);
+        const estimatedDistance = calcDistance(originAP!.stationId, destAP!.stationId);
+        
+        // Validate shipper has sufficient balance
+        await this.validateShipperBalance(shipperId, totalDeliveryCost);
 
-        const delivery = await this.deliveryRepository.createDelivery(deliveryData);
+        // Deduct points from shipper
+        await this.userService.addPointsToUser(shipperId, -totalDeliveryCost);
+
+        // Generate verification code
+        const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+
+        // Create delivery with all required fields
+        const deliveryWithCode = {
+            ...deliveryData,
+            recipientVerificationCode: verificationCode,
+            totalCost: totalDeliveryCost,
+            estimatedDistance,
+            reservedAmount: totalDeliveryCost,
+            currentAccessPoint: deliveryData.originAccessPoint,
+            paidAmount: 0,
+            actualDistance: 0,
+        };
+        
+        const delivery = await this.deliveryRepository.createDelivery(deliveryWithCode as any);
+
+        // Update product status to pending (awaiting pickup)
+        await this.productService.updateProduct(deliveryData.productId, {
+            status: 'pending',
+        });
+
         return delivery;
     }
 
     // 2. CLAIMING (Commuter picks up package)
     async claimPackage(commuterId: string, deliveryId: string) {
-        // - Assign commuter to delivery
-        // - Create new delivery leg
-        // - Update product status to 'in-transit'
-        // - Add product to commuter's activeProductIds
-
         const commuter = await this.userService.findUserById(commuterId);
         if (!commuter) {
             throw new Error('Commuter not found');
         }
 
-        const delivery = await this.deliveryRepository.findDeliveryById(deliveryId);
+        if (commuter.role !== 'rider' && commuter.role !== 'admin') {
+            throw new Error('User must have rider role');
+        }
 
+        const delivery = await this.deliveryRepository.findDeliveryById(deliveryId);
         if (!delivery) {
             throw new Error('Delivery not found');
         }
@@ -82,11 +101,16 @@ export default class DeliveryService {
             throw new Error('Delivery already has a commuter');
         }
 
+        // Validate commuter capacity (max 5 concurrent packages)
+        await this.validateCommuterCapacity(commuterId);
+
         const newLeg = {
             commuterId: commuter._id,
             fromAccessPoint: delivery.currentAccessPoint,
-            toAccessPoint: delivery.destinationAccessPoint, // Will be updated on dropoff
+            toAccessPoint: delivery.destinationAccessPoint,
             pickupTime: new Date(),
+            distance: 0,
+            earnings: 0,
             status: 'in-progress' as const,
         };
 
@@ -95,6 +119,19 @@ export default class DeliveryService {
             currentCommuterId: commuter._id,
             legs: [...delivery.legs, newLeg],
         });
+
+        // Update product status to in-transit
+        await this.productService.updateProduct(delivery.productId.toString(), {
+            status: 'in-transit',
+        });
+
+        // Add product to commuter's active products
+        const { CommuterService } = await import('@/lib/services/commuterService');
+        const commuterService = new CommuterService();
+        const commuterProfile = await commuterService.findCommuterByAccount(commuterId);
+        if (commuterProfile && commuterProfile._id) {
+            await commuterService.addProductToCommuter((commuterProfile._id as any).toString(), delivery.productId.toString());
+        }
 
         return updatedDelivery;
     }
@@ -127,7 +164,6 @@ export default class DeliveryService {
             throw new Error('No active delivery leg found');
         }
 
-
         // Calculate earnings for this leg
         const earnings = await this.calculateLegEarnings(
             currentLeg.fromAccessPoint.toString(),
@@ -149,7 +185,7 @@ export default class DeliveryService {
         const newActualDistance = delivery.actualDistance + distance;
 
         // Check if this is final destination
-        const isFinalDestination = delivery.destinationAccessPoint == currentAccessPoint._id;
+        const isFinalDestination = delivery.destinationAccessPoint.toString() === accessPointId;
         
         const updatedDelivery = await this.deliveryRepository.updateDelivery(deliveryId, {
             status: isFinalDestination ? 'ready-for-recipient' : 'awaiting-pickup',
@@ -160,12 +196,19 @@ export default class DeliveryService {
             actualDistance: newActualDistance,
         });
 
-        // Update product location
-        // Note: Product update needs to be done via repository directly due to schema limitations
-        // await this.productService.updateProduct(delivery.productId.toString(), {
-        //     currentLocation: accessPointId,
-        //     status: isFinalDestination ? 'ready-for-pickup' : 'in-transit',
-        // });
+        // Update product location and status
+        await this.productService.updateProduct(delivery.productId.toString(), {
+            currentLocation: accessPointId,
+            status: isFinalDestination ? 'delivered' : 'in-transit',
+        });
+
+        // Remove product from commuter's active products
+        const { CommuterService } = await import('@/lib/services/commuterService');
+        const commuterService = new CommuterService();
+        const commuterProfile = await commuterService.findCommuterByAccount(commuterId);
+        if (commuterProfile && commuterProfile._id) {
+            await commuterService.removeProductFromCommuter((commuterProfile._id as any).toString(), delivery.productId.toString());
+        }
 
         return updatedDelivery;
     }

@@ -1,28 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { updateDeliveryStatusSchema } from '@/lib/schemas/deliverySchema';
+import DeliveryService from '@/lib/services/deliveryService';
+import { connectMongo } from '@/lib/database/mongoose';
 
 export async function GET(
     request: NextRequest,
     { params }: { params: { id: string } }
 ) {
     try {
+        await connectMongo();
         const { id } = params;
 
-        // TODO: Implement DeliveryService.getDeliveryById()
-        // const deliveryService = new DeliveryService();
-        // const delivery = await deliveryService.getDeliveryById(id);
+        const deliveryService = new DeliveryService();
+        const delivery = await deliveryService.getDeliveryById(id);
 
         return NextResponse.json(
             {
                 success: true,
-                data: { id },
+                data: delivery,
             },
             { status: 200 }
         );
-    } catch (error) {
+    } catch (error: any) {
         console.error('Get delivery error:', error);
         return NextResponse.json(
-            { success: false, error: 'Internal server error' },
+            { success: false, error: error.message || 'Internal server error' },
             { status: 500 }
         );
     }
