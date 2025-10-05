@@ -220,7 +220,7 @@ const NewJob = () => {
                   if (idx === openPath.length - 1) {
                     // Use the correct aspect ratio for your red pin image (e.g., 41x25 or 82x50)
                     icon = L.icon({
-                      iconUrl: '/green-pin.png',
+                      iconUrl: '/red-pin.png',
                       iconSize: [25, 41], // width, height (adjust if using 82x50)
                       iconAnchor: [20, 25] // center bottom
                     });
