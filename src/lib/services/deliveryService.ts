@@ -22,7 +22,6 @@ export default class DeliveryService {
         // - Verify shipper exists and has 'sender' role // Done
         // - Check shipper has sufficient points // Done
         // - Calculate estimated cost // Done
-        // - Reserve funds from shipper's wallet // Done
         // - Create delivery record // Done
         // - Update product status to 'awaiting-pickup' // Done
         // - Generate recipient verification code
@@ -42,6 +41,17 @@ export default class DeliveryService {
             throw new Error('Product not found');
         }
 
+        const totalDeliveryCost = await this.calculateDeliveryCost();
+        
+        // TODO: Implement validateShipperBalance error handling
+        try {
+            this.validateShipperBalance(shipperId, totalDeliveryCost)
+        } catch (error) {
+            throw error;
+        }
+
+
+        
         const delivery = await this.deliveryRepository.createDelivery(deliveryData);
         return delivery;
     }
@@ -77,8 +87,6 @@ export default class DeliveryService {
             fromAccessPoint: delivery.currentAccessPoint,
             toAccessPoint: delivery.destinationAccessPoint, // Will be updated on dropoff
             pickupTime: new Date(),
-            distance: 0, // Will be calculated on dropoff
-            earnings: 0, // Will be calculated on dropoff
             status: 'in-progress' as const,
         };
 
@@ -92,19 +100,7 @@ export default class DeliveryService {
     }
 
     // 3. DROPOFF (Commuter drops at intermediate or final destination)
-    async dropoffPackage(commuterId: string, deliveryId: string, accessPointId: string) {
-        // - Verify commuter owns this delivery
-        // - Verify commuter is at the access point
-        // - Calculate leg distance and earnings
-        // - Complete current delivery leg
-        // - Deduct earnings from shipper's reserved amount
-        // - Pay commuter
-        // - Check if this is final destination:
-        //   - If YES: Update status to 'ready-for-recipient'
-        //   - If NO: Update status to 'awaiting-pickup', clear commuter
-        // - Update product currentLocation
-        // - Remove from commuter's activeProductIds
-        
+    async dropoffPackage(commuterId: string, deliveryId: string, accessPointId: string, distance: number) {
         const commuter = await this.userService.findUserById(commuterId);
         if (!commuter) {
             throw new Error('Commuter not found');
@@ -120,37 +116,94 @@ export default class DeliveryService {
             throw new Error('Delivery not found');
         }
 
-        if (delivery.destinationAccessPoint !== currentAccessPoint._id) {
-            const updatedDelivery = await this.deliveryRepository.updateDelivery(deliveryId, {
-                status: 'awaiting-pickup',
-                currentCommuterId: null,
-            });
-        } else {
-            const updatedDelivery = await this.deliveryRepository.updateDelivery(deliveryId, {
-                status: 'ready-for-recipient',
-                currentCommuterId: null,
-            });
+        // Verify commuter owns this delivery
+        if (delivery.currentCommuterId?.toString() !== commuterId) {
+            throw new Error('Commuter does not own this delivery');
         }
 
+        // Get current leg and complete it
+        const currentLeg = delivery.legs[delivery.legs.length - 1];
+        if (!currentLeg) {
+            throw new Error('No active delivery leg found');
+        }
 
-        const earnings = this.calculateLegEarnings(delivery.legs[delivery.legs.length - 1].distance, delivery.legs[delivery.legs.length - 1].distance, delivery.legs[delivery.legs.length - 1].earnings);
+        // Calculate earnings for this leg
+        const earnings = this.calculateLegEarnings(distance, delivery.estimatedDistance, delivery.totalCost);
 
+        // Update the current leg
+        currentLeg.dropoffTime = new Date();
+        currentLeg.distance = distance;
+        currentLeg.earnings = earnings;
+        currentLeg.status = 'completed';
+        currentLeg.toAccessPoint = currentAccessPoint._id as any;
+
+        // Pay commuter
+        await this.userService.addPointsToUser(commuterId, earnings);
+
+        // Update delivery paid amount
+        const newPaidAmount = delivery.paidAmount + earnings;
+        const newActualDistance = delivery.actualDistance + distance;
+
+        // Check if this is final destination
+        const isFinalDestination = delivery.destinationAccessPoint.toString() === accessPointId;
         
-    
-    
-    
+        const updatedDelivery = await this.deliveryRepository.updateDelivery(deliveryId, {
+            status: isFinalDestination ? 'ready-for-recipient' : 'awaiting-pickup',
+            currentCommuterId: isFinalDestination ? null : delivery.currentCommuterId,
+            currentAccessPoint: currentAccessPoint._id,
+            legs: delivery.legs,
+            paidAmount: newPaidAmount,
+            actualDistance: newActualDistance,
+        });
+
+        // Update product location
+        // Note: Product update needs to be done via repository directly due to schema limitations
+        // await this.productService.updateProduct(delivery.productId.toString(), {
+        //     currentLocation: accessPointId,
+        //     status: isFinalDestination ? 'ready-for-pickup' : 'in-transit',
+        // });
+
+        return updatedDelivery;
     }
+
+    
 
     // 4. RECIPIENT PICKUP (Recipient claims package)
     async recipientPickup(deliveryId: string, verificationCode: string, recipientInfo: any) {
-        // - Verify delivery exists
-        // - Verify status is 'ready-for-recipient'
-        // - Verify verification code matches
-        // - Verify recipient details match
-        // - Update delivery status to 'completed'
-        // - Update product status to 'delivered'
-        // - Set completedAt timestamp
-        // - Release any unused reserved funds back to shipper
+        const delivery = await this.deliveryRepository.findDeliveryById(deliveryId);
+        if (!delivery) {
+            throw new Error('Delivery not found');
+        }
+
+        if (delivery.status !== 'ready-for-recipient') {
+            throw new Error('Delivery is not ready for recipient pickup');
+        }
+
+        if (delivery.recipientVerificationCode !== verificationCode) {
+            throw new Error('Invalid verification code');
+        }
+
+        // Calculate unused funds
+        const unusedFunds = delivery.reservedAmount - delivery.paidAmount;
+
+        // Release unused funds back to shipper
+        if (unusedFunds > 0) {
+            await this.userService.addPointsToUser(delivery.shipperId.toString(), unusedFunds);
+        }
+
+        // Update delivery status to completed
+        const updatedDelivery = await this.deliveryRepository.updateDelivery(deliveryId, {
+            status: 'completed' as any,
+            completedAt: new Date(),
+        });
+
+        // Update product status to delivered
+        // Note: Product update needs to be done via repository directly due to schema limitations
+        // await this.productService.updateProduct(delivery.productId.toString(), {
+        //     status: 'delivered',
+        // });
+
+        return updatedDelivery;
     }
 
     // // 5. QUERY OPERATIONS
@@ -164,65 +217,92 @@ export default class DeliveryService {
     // }
 
     async getDeliveryById(id: string) {
-        // - Find delivery by ID
-        // - Populate shipper, commuter, product, access points
-        // - Return full delivery details
+        const delivery = await this.deliveryRepository.findDeliveryById(id);
+        if (!delivery) {
+            throw new Error('Delivery not found');
+        }
+        return delivery;
     }
 
     async getDeliveryByProductId(productId: string) {
-        // - Find delivery by product ID
-        // - Return delivery details
+        const deliveries = await this.deliveryRepository.findDeliveryByProductId(productId);
+        return deliveries;
     }
 
     async getShipperDeliveries(shipperId: string, status?: string) {
-        // - Find all deliveries for a shipper
-        // - Optional filter by status
-        // - Return list with pagination
+        if (status) {
+            const deliveries = await this.deliveryRepository.findDeliveryByStatus(status);
+            return deliveries.filter(d => d.shipperId.toString() === shipperId);
+        }
+        return await this.deliveryRepository.findDeliveryByShipperId(shipperId);
     }
 
     async getCommuterActiveDeliveries(commuterId: string) {
-        // - Find all deliveries where currentCommuterId matches
-        // - Filter by status 'in-transit'
-        // - Return active deliveries with route info
+        const deliveries = await this.deliveryRepository.findDeliveryByCurrentCommuterId(commuterId);
+        return deliveries.filter(d => d.status === 'in-transit');
     }
 
     // 6. PRICING & CALCULATION
-    async calculateDeliveryCost(originId: string, destinationId: string, weight: number, priority: string) {
+    async calculateDeliveryCost(): Promise<number>{
         // - Get origin and destination coordinates
         // - Calculate distance using Haversine formula
         // - Apply pricing formula:
         //   baseCost = (distance * RATE_PER_KM) + (weight * RATE_PER_KG)
         //   totalCost = baseCost * priorityMultiplier * demandMultiplier
         // - Return estimated cost
+
+        return 0;
     }
 
-    private calculateLegEarnings(legDistance: number, totalDistance: number, totalCost: number) {
-        // - Calculate percentage of journey completed
-        // - Apply platform fee (10%)
-        // - Return earnings for this leg
+    private calculateLegEarnings(legDistance: number, totalDistance: number, totalCost: number): number {
+        // Calculate percentage of journey completed
+        const percentageOfJourney = legDistance / totalDistance;
         
-    
-    
+        // Calculate base earnings for this leg
+        const baseEarnings = totalCost * percentageOfJourney;
+        
+        // Apply platform fee (10%)
+        const platformFee = baseEarnings * 0.10;
+        const earnings = baseEarnings - platformFee;
+        
+        return Math.round(earnings * 100) / 100; // Round to 2 decimal places
     }
 
     // 7. VALIDATION & HELPERS
     async validateShipperBalance(shipperId: string, requiredAmount: number) {
-        // - Get shipper's current points
-        // - Check if sufficient
-        // - Throw InsufficientFundsError if not
+        const shipper = await this.userService.findUserById(shipperId);
+        if (!shipper) {
+            throw new Error('Shipper not found');
+        }
+        
+        if (shipper.points < requiredAmount) {
+            throw new Error(`Insufficient funds. Required: ${requiredAmount}, Available: ${shipper.points}`);
+        }
     }
 
     async validateCommuterCapacity(commuterId: string) {
-        // - Get commuter's active deliveries count
-        // - Check against max capacity
-        // - Throw CapacityExceededError if exceeded
+        const activeDeliveries = await this.getCommuterActiveDeliveries(commuterId);
+        const MAX_CAPACITY = 5; // Maximum packages a commuter can carry
+        
+        if (activeDeliveries.length >= MAX_CAPACITY) {
+            throw new Error(`Capacity exceeded. Maximum capacity: ${MAX_CAPACITY}`);
+        }
     }
 
     async validateLocation(userId: string, requiredAccessPointId: string) {
-        // - Get user's current location (from request or GPS)
-        // - Get access point location
-        // - Calculate distance
-        // - Throw LocationMismatchError if too far
+        // This would typically integrate with GPS/location services
+        // For now, we'll implement a basic check
+        const accessPoint = await this.accessPointService.findAccessPointById(requiredAccessPointId);
+        if (!accessPoint) {
+            throw new Error('Access point not found');
+        }
+        
+        // In a real implementation, you would:
+        // 1. Get user's current GPS coordinates
+        // 2. Calculate distance to access point
+        // 3. Verify they are within acceptable range (e.g., 100 meters)
+        // For now, we'll just return true
+        return true;
     }
 
     // private generateVerificationCode(): string {
@@ -232,13 +312,37 @@ export default class DeliveryService {
 
     // 9. TRACKING & HISTORY
     async getDeliveryHistory(deliveryId: string) {
-        // - Get all delivery legs
-        // - Return timeline of pickup/dropoff events
-        // - Include commuters, locations, timestamps
+        const delivery = await this.deliveryRepository.findDeliveryById(deliveryId);
+        if (!delivery) {
+            throw new Error('Delivery not found');
+        }
+        
+        // Return timeline of all legs with pickup/dropoff events
+        return {
+            deliveryId: delivery._id,
+            status: delivery.status,
+            legs: delivery.legs,
+            createdAt: delivery.createdAt,
+            completedAt: delivery.completedAt,
+        };
     }
 
     async trackDelivery(trackingNumber: string) {
-        // - Find delivery by tracking number
-        // - Return current status, location, estimated arrival
+        // Note: This assumes trackingNumber is the delivery ID
+        // In production, you'd have a separate tracking number field
+        const delivery = await this.deliveryRepository.findDeliveryById(trackingNumber);
+        if (!delivery) {
+            throw new Error('Delivery not found');
+        }
+        
+        return {
+            trackingNumber,
+            status: delivery.status,
+            currentLocation: delivery.currentAccessPoint,
+            destination: delivery.destinationAccessPoint,
+            estimatedDistance: delivery.estimatedDistance,
+            actualDistance: delivery.actualDistance,
+            legs: delivery.legs,
+        };
     }
 }

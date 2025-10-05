@@ -18,9 +18,6 @@ export const initiateDeliverySchema = z.object({
   shipperId: z.string(),
   originAccessPoint: z.string(),
   destinationAccessPoint: z.string(),
-  estimatedDistance: z.number().min(0),
-  totalCost: z.number().min(0),
-  recipientVerificationCode: z.string().min(4).max(8),
 });
 
 // Schema for claiming a package (commuter picks up)
