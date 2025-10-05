@@ -4,7 +4,7 @@ export interface IProduct extends Document {
   name: string;
   description: string;
   destination: string;
-currentLocation: mongoose.Types.ObjectId;
+  currentLocation: string;
   status: 'pending' | 'in-transit' | 'delivered' | 'cancelled';
   trackingNumber?: string;
   sender?: mongoose.Types.ObjectId;

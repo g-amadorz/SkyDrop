@@ -1,3 +1,4 @@
+
 import mongoose, { Schema, Document, Model } from 'mongoose';
 
 export interface IAccessPoint extends Document {
