@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
         } else if (commuterId) {
             deliveries = await deliveryService.getCommuterActiveDeliveries(commuterId);
         } else {
-            deliveries = await deliveryService.getDeliveryById(''); // Will need getAllDeliveries method
+            deliveries = await deliveryService.getAllDeliveries();
         }
 
         return NextResponse.json(

@@ -1,6 +1,6 @@
-import User from '@/lib/database/models/User';
+import User from '@/lib/database/models/user';
 import { createAccountInput, updateAccountInput } from '@/schemas/accountSchema';
-import { IUser } from '@/lib/database/models/User';
+import { IUser } from '@/lib/database/models/user';
 
 export class UserRepository {
     async createUser(userData: createAccountInput): Promise<IUser> {

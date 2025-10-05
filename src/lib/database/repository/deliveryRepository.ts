@@ -1,3 +1,6 @@
+    async getAllDeliveries() {
+        return await Delivery.find({});
+    }
 import Delivery from "@/lib/database/models/Delivery"
 import {InitiateDeliveryInput} from "@/lib/schemas/deliverySchema"
 

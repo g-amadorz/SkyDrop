@@ -1,3 +1,6 @@
+    async getAllDeliveries() {
+        return await this.deliveryRepository.getAllDeliveries();
+    }
 import { DeliveryRepository } from "@/lib/database/repository/deliveryRepository";
 import { UserService } from "@/lib/services/userService";
 import { ProductService } from "@/lib/services/productService";
