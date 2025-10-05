@@ -106,6 +106,7 @@ const NewJob = () => {
         body: JSON.stringify({
           commuterId: user.id,
           deliveryId,
+          packageIds: [deliveryId], // Required by API schema
         }),
       });
 

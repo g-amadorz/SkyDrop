@@ -133,8 +133,9 @@ export default class DeliveryService {
             throw new Error('Delivery already has a commuter');
         }
 
-        // Validate commuter capacity (max 5 concurrent packages)
-        await this.validateCommuterCapacity(commuterId);
+        // Convert Clerk ID to MongoDB ID for validation
+        const commuterMongoId = commuter._id.toString();
+        await this.validateCommuterCapacity(commuterMongoId);
 
         const newLeg = {
             commuterId: commuter._id,
@@ -160,7 +161,7 @@ export default class DeliveryService {
         // Add product to commuter's active products
         const { CommuterService } = await import('@/lib/services/commuterService');
         const commuterService = new CommuterService();
-        const commuterProfile = await commuterService.findCommuterByAccount(commuterId);
+        const commuterProfile = await commuterService.findCommuterByAccount(commuterMongoId);
         if (commuterProfile && commuterProfile._id) {
             await commuterService.addProductToCommuter((commuterProfile._id as any).toString(), delivery.productId.toString());
         }
@@ -185,8 +186,8 @@ export default class DeliveryService {
             throw new Error('Delivery not found');
         }
 
-        // Verify commuter owns this delivery
-        if (delivery.currentCommuterId?.toString() !== commuterId) {
+        // Verify commuter owns this delivery (compare MongoDB IDs)
+        if (delivery.currentCommuterId?.toString() !== commuter._id.toString()) {
             throw new Error('Commuter does not own this delivery');
         }
 
@@ -209,8 +210,8 @@ export default class DeliveryService {
         currentLeg.status = 'completed';
         currentLeg.toAccessPoint = currentAccessPoint._id as any;
 
-        // Pay commuter
-        await this.userService.addPointsToUser(commuterId, earnings);
+        // Pay commuter (use MongoDB ID)
+        await this.userService.addPointsToUser(commuter._id.toString(), earnings);
 
         // Update delivery paid amount
         const newPaidAmount = delivery.paidAmount + earnings;
