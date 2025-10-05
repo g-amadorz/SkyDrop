@@ -94,44 +94,46 @@ const NewJob = () => {
             onOpen={() => setOpenJobId(null)}
           >
             <Typography variant="subtitle1" fontWeight="bold">{name}</Typography>
-            {relatedJobs.map(job => (
-              <Card key={job.id} sx={{ my: 1 }}>
-                <CardContent>
-                  <Typography variant="body2">
-                    From <b>{job.currApId}</b> → <b>{job.destApId}</b><br />
-                    Hops: {bfsShortestPath(skytrainGraph, job.currApId, job.destApId).hops}
-                  </Typography>
-                </CardContent>
-                <CardActions>
-                  <Button
-                    size="small"
-                    variant="contained"
-                    onClick={() => { handleClaim(job.id); }}
-                    disabled={selectedProduct === job.id || !isValidPhone}
-                  >
-                    {selectedProduct === job.id ? "Claimed" : "Claim"}
-                  </Button>
-                  {openJobId === job.id ? (
+            <Box sx={{ maxHeight: 300, overflowY: 'auto', width: 250 }}>
+              {relatedJobs.map(job => (
+                <Card key={job.id} sx={{ my: 1 }}>
+                  <CardContent>
+                    <Typography variant="body2">
+                      From <b>{job.currApId}</b> → <b>{job.destApId}</b><br />
+                      Hops: {bfsShortestPath(skytrainGraph, job.currApId, job.destApId).hops}
+                    </Typography>
+                  </CardContent>
+                  <CardActions>
                     <Button
                       size="small"
-                      variant="outlined"
-                      color="secondary"
-                      onClick={() => setOpenJobId(null)}
+                      variant="contained"
+                      onClick={() => { handleClaim(job.id); }}
+                      disabled={selectedProduct === job.id || !isValidPhone}
                     >
-                      Hide Path
+                      {selectedProduct === job.id ? "Claimed" : "Claim"}
                     </Button>
-                  ) : (
-                    <Button
-                      size="small"
-                      variant="outlined"
-                      onClick={() => setOpenJobId(job.id)}
-                    >
-                      Show Path
-                    </Button>
-                  )}
-                </CardActions>
-              </Card>
-            ))}
+                    {openJobId === job.id ? (
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        color="secondary"
+                        onClick={() => setOpenJobId(null)}
+                      >
+                        Hide Path
+                      </Button>
+                    ) : (
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        onClick={() => setOpenJobId(job.id)}
+                      >
+                        Show Path
+                      </Button>
+                    )}
+                  </CardActions>
+                </Card>
+              ))}
+            </Box>
           </Popup>
         </Marker>
       );
