@@ -4,6 +4,8 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Outfit } from "next/font/google";
 import ShipperSection from "./ShipperSection";
+import CommuterSection from "./CommuterSection";
+// import AccessPointSection from "./AccessPointSection"; // ✅ fixed import
 
 const outfit = Outfit({
   subsets: ["latin"],
@@ -20,8 +22,6 @@ export default function Dashboard() {
   const [activeRole, setActiveRole] = useState("shipper");
   const [showRoleBar, setShowRoleBar] = useState(true);
   const [lastScrollY, setLastScrollY] = useState(0);
-
-  const currentRole = roles.find((r) => r.id === activeRole)!;
 
   useEffect(() => {
     const handleScroll = () => {
@@ -44,48 +44,49 @@ export default function Dashboard() {
         </h1>
       </header>
 
-      {/* --- Role Tabs --- */}
+      {/* --- Role Tabs (rounded design) --- */}
       <motion.div
         initial={{ y: 0 }}
         animate={{ y: showRoleBar ? 0 : -80 }}
         transition={{ duration: 0.3, ease: "easeInOut" }}
-        className="fixed top-[64px] left-0 right-0 backdrop-blur-md bg-white/80 border-b border-transparent flex justify-center gap-12 py-2 z-20 mt-5"
-
+        className="fixed top-[64px] left-0 right-0 flex justify-center z-20 mt-8"
       >
-        {roles.map((role) => (
-          <button
-            key={role.id}
-            onClick={() => setActiveRole(role.id)}
-            className={`relative flex items-center gap-2 pb-2 text-base font-semibold transition-all ${
-              activeRole === role.id
-                ? role.color === "blue"
-                  ? "text-blue-600"
-                  : role.color === "orange"
-                  ? "text-orange-500"
-                  : "text-gray-900"
-                : "text-gray-500 hover:text-gray-800"
-            }`}
-          >
-            <span className="text-xl">{role.emoji}</span>
-            {role.title}
-            {activeRole === role.id && (
-              <motion.div
-                layoutId="underline"
-                className={`absolute bottom-0 left-0 right-0 h-[3px] ${
-                  role.color === "blue"
-                    ? "bg-blue-500"
+        <div className="flex items-center justify-center gap-8 bg-white border border-gray-200 rounded-full px-10 py-3 shadow-sm backdrop-blur-md">
+          {roles.map((role) => (
+            <button
+              key={role.id}
+              onClick={() => setActiveRole(role.id)}
+              className={`relative flex items-center gap-2 pb-2 text-base font-semibold transition-all ${
+                activeRole === role.id
+                  ? role.color === "blue"
+                    ? "text-blue-600"
                     : role.color === "orange"
-                    ? "bg-orange-500"
-                    : "bg-gray-900"
-                }`}
-              />
-            )}
-          </button>
-        ))}
+                    ? "text-orange-500"
+                    : "text-gray-900"
+                  : "text-gray-500 hover:text-gray-800"
+              }`}
+            >
+              <span className="text-xl">{role.emoji}</span>
+              {role.title}
+              {activeRole === role.id && (
+                <motion.div
+                  layoutId="underline"
+                  className={`absolute bottom-0 left-0 right-0 h-[3px] ${
+                    role.color === "blue"
+                      ? "bg-blue-500"
+                      : role.color === "orange"
+                      ? "bg-orange-500"
+                      : "bg-gray-900"
+                  }`}
+                />
+              )}
+            </button>
+          ))}
+        </div>
       </motion.div>
 
       {/* --- Page Content --- */}
-      <main className="pt-[140px] pb-20 w-full flex justify-center">
+      <main className="pt-[110px] pb-20 w-full flex justify-center">
         <AnimatePresence mode="wait">
           <motion.div
             key={activeRole}
@@ -98,13 +99,9 @@ export default function Dashboard() {
             {activeRole === "shipper" ? (
               <ShipperSection />
             ) : activeRole === "commuter" ? (
-              <p className="text-gray-700 mt-20">
-                Commuter dashboard coming soon 🚴‍♂️
-              </p>
+              <CommuterSection />
             ) : (
-              <p className="text-gray-700 mt-20">
-                Access Point dashboard coming soon 🏪
-              </p>
+              <AccessPointSection />
             )}
           </motion.div>
         </AnimatePresence>
