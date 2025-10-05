@@ -1,12 +1,14 @@
 
+
 import mongoose, { Schema, Document, Model } from 'mongoose';
 
 export interface IAccessPoint extends Document {
     name: string;
     nearestStation: string;
-    account: mongoose.Types.ObjectId;
-    lat: Number;
-    lng: Number;
+    stationId?: string;
+    account: string;
+    lat: number;
+    lng: number;
 }
 
 const AccessPointSchema: Schema<IAccessPoint> = new Schema(
@@ -21,9 +23,15 @@ const AccessPointSchema: Schema<IAccessPoint> = new Schema(
             required: [true, "Access point's nearest station is required"],
             trim: true,
         },
+        stationId: {
+            type: String,
+            required: false,
+            trim: true,
+        },
         account: {
-            type: Schema.Types.ObjectId,
-            ref: 'User',
+            type: String,
+            required: [true, 'Account is required'],
+            trim: true,
         },
         lat: {
             type: Number,

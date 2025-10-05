@@ -38,34 +38,13 @@ export const CommuterProvider = ({ children }) => {
             return commuters.find(commuter => commuter.id === id);
         };
 
-        // Load commuters from localStorage on mount
+        // TODO: Replace with API-based CRUD. For now, just initialize as empty or fetch from API if available.
         useEffect(() => {
             if (!dataLoaded) {
-                const stored = localStorage.getItem('commuters');
-                if (stored) {
-                    try {
-                        const parsed = JSON.parse(stored);
-                        if (Array.isArray(parsed)) {
-                            setCommuters(parsed);
-                        } else {
-                            setCommuters([]);
-                        }
-                    } catch (error) {
-                        setCommuters([]);
-                    }
-                } else {
-                    setCommuters([]);
-                }
+                // Example: fetch('/api/commuters').then(...)
                 setDataLoaded(true);
             }
         }, [dataLoaded]);
-
-        // Save to localStorage when commuters changes (but only after initial load)
-        useEffect(() => {
-            if (dataLoaded) {
-                localStorage.setItem('commuters', JSON.stringify(commuters));
-            }
-        }, [commuters, dataLoaded]);
 
     const value = {
         commuters,

@@ -170,7 +170,9 @@ const NewAccessPointPage = ({ radius = DEFAULT_RADIUS }) => {
         lng: pin[1],
         nearestStation: nearest?.name || "",
         nearestStationDist: nearest?.dist || 0,
-        numProducts: 0
+        numProducts: 0,
+        stationId: nearest?.name || "",
+        account: "demo-account" // TODO: Replace with real user/account info
       });
       setSnack(true);
       setPin(null);

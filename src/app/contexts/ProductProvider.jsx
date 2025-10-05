@@ -21,7 +21,8 @@ export const ProductProvider = ({ children }) => {
                 id: prevProducts.length === 0 ? 0 : Math.max(...prevProducts.map(p => p.id ?? 0)) + 1,
                 currApId,
                 destApId,
-                price,
+                recipientId, //String phone number
+
             };
             return [...prevProducts, newProduct];
         });
@@ -32,34 +33,13 @@ export const ProductProvider = ({ children }) => {
         return products.find(product => product.id === id);
     }
 
-    //Local Storage load    TODO: Remove when replacing with API call, just here for testing 
+    // TODO: Replace with API-based CRUD. For now, just initialize as empty or fetch from API if available.
     useEffect(() => {
         if (!dataLoaded) {
-            const stored = localStorage.getItem('products');
-            if (stored) {
-                try {
-                    const parsed = JSON.parse(stored);
-                    if (Array.isArray(parsed)) {
-                        setProducts(parsed);
-                    } else {
-                        setProducts([]);
-                    }
-                } catch (error) {
-                    setProducts([]);
-                }
-            } else {
-                setProducts([]);
-            }
+            // Example: fetch('/api/products').then(...)
             setDataLoaded(true);
         }
     }, [dataLoaded]);
-
-    // Save to localStorage when products changes (but only after initial load)
-    useEffect(() => {
-        if (dataLoaded) {
-            localStorage.setItem('products', JSON.stringify(products));
-        }
-    }, [products, dataLoaded]);
 
 
     // Associate a commuter phone number with a product by id

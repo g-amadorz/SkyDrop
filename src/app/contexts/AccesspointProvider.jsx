@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { AccesspointContext } from './AccesspointContext';
 
 export const AccesspointProvider = ({ children }) => {
-    const [accessPoints, setAccessPoints] = useState([]);   // Query from DB or localStorage
+    const [accessPoints, setAccessPoints] = useState([]);
     const [dataLoaded, setDataLoaded] = useState(false);
 
     // Generate a unique id for each access point
@@ -14,7 +14,7 @@ export const AccesspointProvider = ({ children }) => {
     };
 
     // Accesspoint object
-    const create = async ({ name, numProducts = 0, nearestStation, lat, lng }) => {
+    const create = async ({ name, numProducts = 0, nearestStation, lat, lng, stationId, account }) => {
         try {
             const response = await fetch('/api/access-points', {
                 method: 'POST',
@@ -26,6 +26,8 @@ export const AccesspointProvider = ({ children }) => {
                     nearestStation,
                     lat,
                     lng,
+                    stationId: stationId || nearestStation || '',
+                    account: account || 'demo-account',
                 }),
             });
 
@@ -58,34 +60,25 @@ export const AccesspointProvider = ({ children }) => {
     // Get access point by id
     const get = (id) => accessPoints.find(ap => ap.id === id);
 
-    // Local Storage load (for testing, replace with API later)
+    // Load access points from backend API on mount
     useEffect(() => {
         if (!dataLoaded) {
-            const stored = localStorage.getItem('accessPoints');
-            if (stored) {
-                try {
-                    const parsed = JSON.parse(stored);
-                    if (Array.isArray(parsed)) {
-                        setAccessPoints(parsed);
+            fetch('/api/access-points')
+                .then(res => res.json())
+                .then(json => {
+                    if (json.success && Array.isArray(json.data)) {
+                        setAccessPoints(json.data);
                     } else {
                         setAccessPoints([]);
                     }
-                } catch (error) {
+                    setDataLoaded(true);
+                })
+                .catch(() => {
                     setAccessPoints([]);
-                }
-            } else {
-                setAccessPoints([]);
-            }
-            setDataLoaded(true);
+                    setDataLoaded(true);
+                });
         }
     }, [dataLoaded]);
-
-    // Save to localStorage when accessPoints changes (after initial load)
-    useEffect(() => {
-        if (dataLoaded) {
-            localStorage.setItem('accessPoints', JSON.stringify(accessPoints));
-        }
-    }, [accessPoints, dataLoaded]);
 
     const value = {
         accessPoints,

@@ -32,34 +32,13 @@ export const ShipperProvider = ({ children }) => {
         return shippers.find(shipper => shipper.id === id);
     };
 
-    // Load shippers from localStorage on mount
+    // TODO: Replace with API-based CRUD. For now, just initialize as empty or fetch from API if available.
     useEffect(() => {
         if (!dataLoaded) {
-            const stored = localStorage.getItem('shippers');
-            if (stored) {
-                try {
-                    const parsed = JSON.parse(stored);
-                    if (Array.isArray(parsed)) {
-                        setShippers(parsed);
-                    } else {
-                        setShippers([]);
-                    }
-                } catch (error) {
-                    setShippers([]);
-                }
-            } else {
-                setShippers([]);
-            }
+            // Example: fetch('/api/shippers').then(...)
             setDataLoaded(true);
         }
     }, [dataLoaded]);
-
-    // Save to localStorage when shippers changes (but only after initial load)
-    useEffect(() => {
-        if (dataLoaded) {
-            localStorage.setItem('shippers', JSON.stringify(shippers));
-        }
-    }, [shippers, dataLoaded]);
 
     const value = {
         shippers,
