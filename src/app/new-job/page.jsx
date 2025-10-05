@@ -69,12 +69,8 @@ const NewJob = () => {
       try {
         const res = await fetch('/api/deliveries?status=awaiting-pickup');
         const data = await res.json();
-        console.log('Fetched deliveries:', data); // Debug log
         if (data.success && data.data?.deliveries) {
-          console.log('Setting deliveries:', data.data.deliveries); // Debug log
           setDeliveries(data.data.deliveries);
-        } else {
-          console.log('No deliveries found or API error:', data);
         }
       } catch (error) {
         console.error('Error fetching deliveries:', error);
@@ -82,8 +78,8 @@ const NewJob = () => {
     };
 
     fetchDeliveries();
-    // Poll for new deliveries every 2 seconds (for testing)
-    const interval = setInterval(fetchDeliveries, 2000);
+    // Poll for new deliveries every 5 seconds
+    const interval = setInterval(fetchDeliveries, 5000);
     return () => clearInterval(interval);
   }, []);
 

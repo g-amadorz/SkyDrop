@@ -160,6 +160,31 @@ const NewAccessPointPage = ({ radius = DEFAULT_RADIUS }) => {
   // Can place if within radius of any station
   const canPlace = nearest && nearest.dist <= radius;
 
+  // Convert station name to ID format expected by skytrainNetwork.ts
+  const convertStationNameToId = (stationName) => {
+    const nameToIdMap = {
+      'VCC-Clark': 'vcc-clark',
+      'Commercial-Broadway': 'commercial-broadway',
+      'Renfrew': 'renfrew',
+      'Rupert': 'rupert',
+      'Gilmore': 'gilmore',
+      'Brentwood Town Centre': 'brentwood',
+      'Holdom': 'holdom',
+      'Sperling - Burnaby Lake': 'sperling',
+      'Lake City Way': 'lake-city',
+      'Production Way - University': 'production-way',
+      'Lougheed Town Centre': 'lougheed',
+      'Burquitlam': 'burquitlam',
+      'Moody Centre': 'moody-centre',
+      'Inlet Centre': 'inlet-centre',
+      'Coquitlam Central': 'coquitlam-central',
+      'Lincoln': 'lincoln',
+      'Lafarge Lake-Douglas': 'lafarge',
+      // Add more mappings as needed
+    };
+    return nameToIdMap[stationName] || stationName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+  };
+
   // Handle creating the access point
   const handleCreate = async () => {
     if (!canPlace || !name || name.length < 2) {
@@ -167,6 +192,8 @@ const NewAccessPointPage = ({ radius = DEFAULT_RADIUS }) => {
       return;
     }
     try {
+      const stationId = convertStationNameToId(nearest?.name || "");
+      
       // Save lat/lng as separate fields
       await create({
         name,
@@ -175,7 +202,7 @@ const NewAccessPointPage = ({ radius = DEFAULT_RADIUS }) => {
         nearestStation: nearest?.name || "",
         nearestStationDist: nearest?.dist || 0,
         numProducts: 0,
-        stationId: nearest?.name || "",
+        stationId: stationId,
         account: "demo-account" // TODO: Replace with real user/account info
       });
       setSnack(true);
@@ -184,6 +211,7 @@ const NewAccessPointPage = ({ radius = DEFAULT_RADIUS }) => {
       setNameTouched(false);
       setError("");
     } catch (e) {
+      console.error('Error creating access point:', e);
       setError("Failed to create access point.");
     }
   };

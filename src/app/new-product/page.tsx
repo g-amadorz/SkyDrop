@@ -1,5 +1,5 @@
 "use client";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useUser } from "@clerk/nextjs";
 import { motion } from "framer-motion";
 import { Outfit } from "next/font/google";
@@ -9,7 +9,7 @@ import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { useRouter } from "next/navigation";
 import { useProduct } from '../contexts/ProductContext';
 import { useAccesspoint } from '../contexts/AccesspointContext';
-import { bfsShortestPath, skytrainGraph, stationCoords } from '../compute/CalcHops';
+import { bfsShortestPath, skytrainGraph } from '../compute/CalcHops';
 
 const outfit = Outfit({
   subsets: ["latin"],
@@ -40,10 +40,7 @@ const Page = () => {
     const ap = accessPoints.find((ap: any) => ap.id === optionId || ap._id === optionId);
     if (ap && ap.nearestStation) return ap.nearestStation;
     
-    // Check if it's directly a station name from stationCoords
-    if ((stationCoords as any)[optionId]) return optionId;
-    
-    // Otherwise, assume it's a station name/id
+    // If no access point found, assume it's a station name/id
     return optionId;
   };
 
@@ -66,30 +63,6 @@ const Page = () => {
     setShowApproval(true);
   };
 
-  // Helper function to find nearest access point to a station
-  const findNearestAccessPoint = (stationName: string) => {
-    if (!(stationCoords as any)[stationName]) return null;
-    
-    const stationCoord = (stationCoords as any)[stationName];
-    let nearest: any = null;
-    let minDistance = Infinity;
-    
-    accessPoints.forEach((ap: any) => {
-      if (ap.lat && ap.lng) {
-        const distance = Math.sqrt(
-          Math.pow(ap.lat - stationCoord[0], 2) + 
-          Math.pow(ap.lng - stationCoord[1], 2)
-        );
-        if (distance < minDistance) {
-          minDistance = distance;
-          nearest = ap;
-        }
-      }
-    });
-    
-    return nearest;
-  };
-
   const handleApprove = () => {
     const productId = "mock-product-id";
     const shipperId = user?.id;
@@ -98,45 +71,13 @@ const Page = () => {
       return;
     }
 
-    // Get the selected options
-    const originOption = allOptions.find(opt => opt.id === form.currApId);
-    const destOption = allOptions.find(opt => opt.id === form.destApId);
-
-    if (!originOption || !destOption) {
-      alert("Please select valid locations.");
-      return;
-    }
-
-    let finalOriginId = form.currApId;
-    let finalDestId = form.destApId;
-
-    // If origin is a station, find nearest access point
-    if (originOption.type === 'station') {
-      const nearestAP = findNearestAccessPoint(originOption.id);
-      if (!nearestAP) {
-        alert(`No access points found near ${originOption.label}. Please select an access point directly.`);
-        return;
-      }
-      finalOriginId = nearestAP._id || nearestAP.id;
-    }
-
-    // If destination is a station, find nearest access point
-    if (destOption.type === 'station') {
-      const nearestAP = findNearestAccessPoint(destOption.id);
-      if (!nearestAP) {
-        alert(`No access points found near ${destOption.label}. Please select an access point directly.`);
-        return;
-      }
-      finalDestId = nearestAP._id || nearestAP.id;
-    }
-
     const { hops } = calculateCost();
     
     create({
       productId,
       shipperId,
-      currApId: finalOriginId,
-      destApId: finalDestId,
+      currApId: form.currApId,
+      destApId: form.destApId,
       price: hops,
       name: form.name
     });
@@ -153,11 +94,16 @@ const Page = () => {
 
 
   // Get access points and stations
-  const { accessPoints } = useAccesspoint();
+  const { accessPoints, refresh } = useAccesspoint();
+
+  // Refresh access points when component mounts
+  useEffect(() => {
+    refresh();
+  }, []);
   
   // Map access points to option objects
   const accessPointOptions = accessPoints.map((ap: any, index: number) => ({
-    label: `${ap.name} (Access Point)`,
+    label: `${ap.name}`,
     value: ap.name,
     type: 'accessPoint',
     id: ap._id || ap.id,
@@ -167,28 +113,11 @@ const Page = () => {
     stationId: ap.stationId || ap.nearestStation,
   }));
 
-  // Map stations to option objects
-  const stationOptions = Object.entries(stationCoords)
-    .filter(([name, coords]) => {
-      // Filter out custom access points that are already in accessPoints
-      return !accessPoints.some((ap: any) => ap.name === name);
-    })
-    .map(([name, coords], index: number) => ({
-      label: `${name} (Station)`,
-      value: name,
-      type: 'station',
-      id: name,
-      uniqueKey: `station-${name}-${index}`, // Unique key for React rendering
-      lat: (coords as number[])[0],
-      lng: (coords as number[])[1],
-      stationId: name,
-    }));
+  // NOTE: Only using access points to avoid ObjectId casting issues
+  // Stations are used for routing only, deliveries require physical access points
   
-  // Combine access points and stations, sorted by type then name
-  const allOptions = [
-    ...accessPointOptions.sort((a: any, b: any) => a.label.localeCompare(b.label)),
-    ...stationOptions.sort((a: any, b: any) => a.label.localeCompare(b.label))
-  ];
+  // Only use access points for deliveries
+  const allOptions = accessPointOptions.sort((a: any, b: any) => a.label.localeCompare(b.label));
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", height: "100vh" }}>
@@ -264,7 +193,7 @@ const Page = () => {
               options={allOptions}
               getOptionLabel={option => option.label}
               getOptionKey={option => option.uniqueKey}
-              value={allOptions.find(opt => opt.id === form.currApId) || null}
+              value={allOptions.find((opt: any) => opt.id === form.currApId) || null}
               onChange={(_, newValue) => setForm(f => ({ ...f, currApId: newValue ? newValue.id : "" }))}
               renderInput={(params) => (
                 <TextField {...params} label="Origin Access Point" required />
@@ -274,7 +203,7 @@ const Page = () => {
               options={allOptions}
               getOptionLabel={option => option.label}
               getOptionKey={option => option.uniqueKey}
-              value={allOptions.find(opt => opt.id === form.destApId) || null}
+              value={allOptions.find((opt: any) => opt.id === form.destApId) || null}
               onChange={(_, newValue) => setForm(f => ({ ...f, destApId: newValue ? newValue.id : "" }))}
               renderInput={(params) => (
                 <TextField {...params} label="Destination Access Point" required />

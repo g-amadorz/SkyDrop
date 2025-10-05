@@ -60,6 +60,19 @@ export const AccesspointProvider = ({ children }) => {
     // Get access point by id
     const get = (id) => accessPoints.find(ap => ap.id === id);
 
+    // Refresh access points from backend
+    const refresh = async () => {
+        try {
+            const res = await fetch('/api/access-points');
+            const json = await res.json();
+            if (json.success && Array.isArray(json.data)) {
+                setAccessPoints(json.data);
+            }
+        } catch (error) {
+            console.error('Error refreshing access points:', error);
+        }
+    };
+
     // Load access points from backend API on mount
     useEffect(() => {
         if (!dataLoaded) {
@@ -84,6 +97,7 @@ export const AccesspointProvider = ({ children }) => {
         accessPoints,
         create,
         get,
+        refresh,
     };
 
     return (
