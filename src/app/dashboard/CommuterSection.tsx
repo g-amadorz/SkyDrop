@@ -4,14 +4,7 @@ import { useState, useMemo } from "react";
 import dynamic from "next/dynamic";
 import { motion } from "framer-motion";
 import { Outfit } from "next/font/google";
-import {
-  Typography,
-  Card,
-  CardContent,
-  CardActions,
-  Snackbar,
-  Alert,
-} from "@mui/material";
+import { TextField, Autocomplete, Snackbar, Alert, Typography } from "@mui/material";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { bfsShortestPath, stationCoords, skytrainGraph } from "@/app/compute/CalcHops";
@@ -29,38 +22,71 @@ const outfit = Outfit({
 
 export default function CommuterSection() {
   const { accessPoints } = useAccesspoint();
-
-  // Fake example delivery
-  const testDelivery = {
-    id: "demo1",
-    origin: "Burrard (Station)",
-    destination: "Commercial–Broadway (Station)",
-    reward: 80,
-  };
-
-  const [selectedDelivery, setSelectedDelivery] = useState<any>(null);
+  const [origin, setOrigin] = useState("");
+  const [destination, setDestination] = useState("");
+  const [availableJobs, setAvailableJobs] = useState<any[]>([]);
+  const [selectedJob, setSelectedJob] = useState<any>(null);
   const [snack, setSnack] = useState(false);
 
+  // Combine Access Points + Stations
+  const accessPointOptions =
+    accessPoints?.map((ap: any) => ({
+      label: `${ap.name} (Access Point)`,
+      value: ap.name,
+      nearestStation: ap.nearestStation,
+    })) || [];
+
+  const stationOptions = Object.keys(skytrainGraph).map((station) => ({
+    label: `${station} (Station)`,
+    value: station,
+  }));
+
+  const allOptions = [...accessPointOptions, ...stationOptions];
+
+  // Helper: AccessPoint → Station
   const resolveToStation = (name: string) => {
     const ap = accessPoints.find((ap: any) => ap.name === name);
     return ap?.nearestStation || name;
   };
 
+  // Calculate Route (hops + path)
   const calculateRoute = (origin: string, destination: string) => {
     const start = resolveToStation(origin);
     const end = resolveToStation(destination);
     return bfsShortestPath(skytrainGraph, start, end);
   };
 
-  const handleClaim = (delivery: any) => {
-    setSelectedDelivery(delivery);
+  // Fake job data
+  const allJobs = [
+    { id: 1, origin: "Burrard (Station)", destination: "Commercial–Broadway (Station)", reward: 80 },
+    { id: 2, origin: "Main Street–Science World (Station)", destination: "Joyce–Collingwood (Station)", reward: 100 },
+    { id: 3, origin: "Waterfront (Station)", destination: "Metrotown (Station)", reward: 120 },
+  ];
+
+  const handleClaim = () => {
+    if (!origin || !destination) return;
+    const start = resolveToStation(origin);
+    const end = resolveToStation(destination);
+
+    // Filter matching jobs
+    const jobs = allJobs.filter(
+      (j) =>
+        resolveToStation(j.origin) === start &&
+        resolveToStation(j.destination) === end
+    );
+
+    setAvailableJobs(jobs);
     setSnack(true);
   };
 
-  // Animated markers
+  const handleSelectJob = (job: any) => {
+    setSelectedJob(job);
+  };
+
+  // Animated Markers for Selected Job
   const markers = useMemo(() => {
-    if (!selectedDelivery) return [];
-    const { path } = calculateRoute(selectedDelivery.origin, selectedDelivery.destination);
+    if (!selectedJob) return [];
+    const { path } = calculateRoute(selectedJob.origin, selectedJob.destination);
 
     return path.map((node, idx) => {
       const pos = stationCoords[node];
@@ -84,51 +110,82 @@ export default function CommuterSection() {
         </motion.div>
       );
     });
-  }, [selectedDelivery]);
+  }, [selectedJob]);
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5 }}
-      className={`${outfit.className} flex flex-col items-center justify-start px-6 py-10 bg-white min-h-screen`}
+      transition={{ duration: 0.4 }}
+      className={`${outfit.className} flex flex-col items-center text-center px-6 pt-6 pb-10 bg-white min-h-screen`}
     >
       {/* Header */}
       <h1 className="text-4xl font-extrabold text-gray-900 mb-2">
         Become a <span className="text-blue-600">Commuter</span>
       </h1>
-      <p className="text-gray-600 mb-8 max-w-md text-center">
-        Accept a delivery request and earn rewards for every route you complete.
+      <p className="text-gray-600 mb-10 max-w-md">
+        Select your route to view available delivery jobs and earn rewards for each trip.
       </p>
 
-      {/* Example Task */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-3xl">
-        <Card className="shadow-sm border border-gray-200 hover:shadow-lg transition-all rounded-2xl">
-          <CardContent>
-            <Typography variant="h6" fontWeight="bold" gutterBottom>
-              {testDelivery.origin} → {testDelivery.destination}
-            </Typography>
-            <Typography color="text.secondary">
-              Reward:{" "}
-              <span className="font-semibold text-blue-600">
-                {testDelivery.reward} pts
-              </span>
-            </Typography>
-          </CardContent>
-          <CardActions>
-            <button
-              onClick={() => handleClaim(testDelivery)}
-              className="w-full py-3 rounded-full bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow-md transition-all"
-            >
-              Claim Job
-            </button>
-          </CardActions>
-        </Card>
+      {/* Origin / Destination Selection */}
+      <div className="w-full max-w-md mb-8 flex flex-col gap-4">
+        <Autocomplete
+          options={allOptions}
+          getOptionLabel={(option) => option.label}
+          onChange={(_, newValue) => setOrigin(newValue?.value || "")}
+          renderInput={(params) => <TextField {...params} label="Origin (Access Point or Station)" required />}
+        />
+
+        <Autocomplete
+          options={allOptions}
+          getOptionLabel={(option) => option.label}
+          onChange={(_, newValue) => setDestination(newValue?.value || "")}
+          renderInput={(params) => <TextField {...params} label="Destination (Access Point or Station)" required />}
+        />
+
+        <button
+          onClick={handleClaim}
+          className="mt-3 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-full shadow-md transition"
+        >
+          Claim Jobs
+        </button>
       </div>
 
-      {/* Map */}
-      {selectedDelivery && (
-        <div className="mt-10 w-full max-w-3xl rounded-xl overflow-hidden border border-gray-200 shadow-md">
+      {/* Available Jobs */}
+      {availableJobs.length > 0 && (
+        <div className="w-full max-w-3xl mb-10">
+          <p className="text-lg font-semibold text-gray-800 mb-4">
+            Available Jobs for this route:
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {availableJobs.map((job) => (
+              <div
+                key={job.id}
+                onClick={() => handleSelectJob(job)}
+                className={`p-5 rounded-2xl border transition-all cursor-pointer ${
+                  selectedJob?.id === job.id
+                    ? "border-blue-500 bg-blue-50"
+                    : "border-gray-200 hover:border-blue-300"
+                }`}
+              >
+                <Typography variant="h6" fontWeight="bold" gutterBottom>
+                  {job.origin} → {job.destination}
+                </Typography>
+                <Typography color="text.secondary">
+                  Reward:{" "}
+                  <span className="font-semibold text-blue-600">
+                    {job.reward} pts
+                  </span>
+                </Typography>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Map Visualization */}
+      {selectedJob && (
+        <div className="w-full max-w-3xl rounded-xl overflow-hidden border border-gray-200 shadow-md">
           <MapContainer
             center={[49.25, -123.1]}
             zoom={11}
@@ -138,7 +195,7 @@ export default function CommuterSection() {
             <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
             {markers}
             <Polyline
-              positions={calculateRoute(selectedDelivery.origin, selectedDelivery.destination).path.map(
+              positions={calculateRoute(selectedJob.origin, selectedJob.destination).path.map(
                 (n) => stationCoords[n]
               )}
               pathOptions={{ color: "#3B82F6", weight: 4 }}
@@ -147,9 +204,10 @@ export default function CommuterSection() {
         </div>
       )}
 
+      {/* Snackbar Notification */}
       <Snackbar open={snack} autoHideDuration={3000} onClose={() => setSnack(false)}>
         <Alert severity="success" sx={{ width: "100%" }}>
-          🎉 Job successfully claimed!
+          🎉 Jobs loaded successfully!
         </Alert>
       </Snackbar>
     </motion.div>
