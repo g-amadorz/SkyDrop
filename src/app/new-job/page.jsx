@@ -7,9 +7,11 @@ import {
 } from "@mui/material";
 import MenuIcon from "@mui/icons-material/Menu";
 import CloseIcon from "@mui/icons-material/Close";
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import dynamic from "next/dynamic";
 import { useUser } from "@clerk/nextjs";
 import { useAccesspoint } from "../contexts/AccesspointContext";
+import { useRouter } from "next/navigation";
 import "leaflet/dist/leaflet.css";
 
 import { stationCoords, bfsShortestPath, skytrainGraph } from "../compute/CalcHops";
@@ -24,6 +26,7 @@ const Polyline = dynamic(() => import("react-leaflet").then(mod => mod.Polyline)
 const NewJob = () => {
   const { user } = useUser();
   const { accessPoints } = useAccesspoint ? useAccesspoint() : { accessPoints: [] };
+  const router = useRouter();
 
   const [deliveries, setDeliveries] = useState([]);
   const [phone, setPhone] = useState("");
@@ -393,18 +396,75 @@ const NewJob = () => {
   );
 
   return (
-    <Box sx={{ display: "flex", flexDirection: isMobile ? "column" : "row", height: "100vh" }}>
-      {isMobile ? <>
-        <IconButton onClick={() => setDrawerOpen(true)} sx={{ position: "absolute", top: 10, right: 10, zIndex: 1000, bgcolor: "white" }}><MenuIcon /></IconButton>
-        <Drawer anchor="right" open={drawerOpen} onClose={() => setDrawerOpen(false)}>{JobList}</Drawer>
-      </> : <Box sx={{ flexShrink: 0, width: 300, borderRight: "1px solid #ddd", height: "100%", overflowY: "auto", bgcolor: "#fafafa" }}>{JobList}</Box>}
+    <Box sx={{ display: "flex", flexDirection: "column", height: "100vh" }}>
+      {/* Header */}
+      <Box
+        sx={{
+          position: "sticky",
+          top: 0,
+          zIndex: 1100,
+          bgcolor: "white",
+          borderBottom: "1px solid #e0e0e0",
+          px: 2,
+          py: 1.5,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          boxShadow: "0 2px 4px rgba(0,0,0,0.1)"
+        }}
+      >
+        <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+          <IconButton
+            onClick={() => router.push("/dashboard")}
+            sx={{
+              bgcolor: "rgba(59, 130, 246, 0.1)",
+              color: "#3b82f6",
+              "&:hover": {
+                bgcolor: "rgba(59, 130, 246, 0.2)"
+              }
+            }}
+          >
+            <ArrowBackIcon />
+          </IconButton>
+          <Typography variant="h6" sx={{ fontWeight: 600, color: "#1f2937" }}>
+            Available Jobs
+          </Typography>
+        </Box>
+        {isMobile && (
+          <IconButton
+            onClick={() => setDrawerOpen(true)}
+            sx={{
+              bgcolor: "white",
+              border: "1px solid #e0e0e0",
+              "&:hover": {
+                bgcolor: "#f9f9f9"
+              }
+            }}
+          >
+            <MenuIcon />
+          </IconButton>
+        )}
+      </Box>
 
-      <Box sx={{ flexGrow: 1, position: 'relative' }}>
-        <MapContainer center={[49.25, -123.1]} zoom={11} scrollWheelZoom style={{ height: "100%", width: "100%" }}>
-          <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution="&copy; OpenStreetMap contributors" />
-          {markers}
-          {renderPath()}
-        </MapContainer>
+      {/* Main Content */}
+      <Box sx={{ display: "flex", flexDirection: isMobile ? "column" : "row", height: "calc(100vh - 70px)" }}>
+        {isMobile ? (
+          <Drawer anchor="right" open={drawerOpen} onClose={() => setDrawerOpen(false)}>
+            {JobList}
+          </Drawer>
+        ) : (
+          <Box sx={{ flexShrink: 0, width: 300, borderRight: "1px solid #ddd", height: "100%", overflowY: "auto", bgcolor: "#fafafa" }}>
+            {JobList}
+          </Box>
+        )}
+
+        <Box sx={{ flexGrow: 1, position: 'relative' }}>
+          <MapContainer center={[49.25, -123.1]} zoom={11} scrollWheelZoom style={{ height: "100%", width: "100%" }}>
+            <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution="&copy; OpenStreetMap contributors" />
+            {markers}
+            {renderPath()}
+          </MapContainer>
+        </Box>
       </Box>
 
       <Snackbar open={snack} autoHideDuration={3000} onClose={() => setSnack(false)}>
