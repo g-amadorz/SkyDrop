@@ -19,8 +19,8 @@ export class AccessPointRepository {
         return await AccessPoint.findOne({ name });
     }
 
-    async findAccessPointsByStation(stationId: string): Promise<IAccessPoint[]> {
-        return await AccessPoint.find({ stationId });
+    async findAccessPointsByStation(stationName: string): Promise<IAccessPoint[]> {
+        return await AccessPoint.find({ nearestStation: stationName });
     }
 
     async findAccessPointsByAccount(accountId: string): Promise<IAccessPoint[]> {

@@ -244,17 +244,12 @@ export default class DeliveryService {
             throw new Error('Access point not found');
         }
 
-        const hops = calculateStationDistance(
-            originAccessPoint.stationId,
-            destinationAccessPoint.stationId
-        );
-
         // Pricing constants
         const COST_PER_STATION = 1.50; // $1.50 per station hop
         const PLATFORM_FEE_PERCENTAGE = 0.10; // 10% platform fee
 
         // Calculate base cost
-        const baseCost = (hops * COST_PER_STATION);
+        const baseCost = (COST_PER_STATION);
 
         // Add platform fee
         const totalCost = baseCost * (1 + PLATFORM_FEE_PERCENTAGE);
@@ -271,17 +266,17 @@ export default class DeliveryService {
             throw new Error('Access point not found');
         }
 
-        const hops = calculateStationDistance(
-            originAccessPoint.stationId,
-            destinationAccessPoint.stationId
-        );
+        // const hops = calculateStationDistance(
+        //     originAccessPoint.stationId,
+        //     destinationAccessPoint.stationId
+        // );
 
         const COST_PER_STATION = 1.50; 
         const PLATFORM_FEE_PERCENTAGE = 0.10;
 
-        const baseCost = (hops * COST_PER_STATION);
+        // const baseCost = (hops * COST_PER_STATION);
 
-        const totalCost = baseCost * (1 + PLATFORM_FEE_PERCENTAGE);
+        const totalCost = (1 + PLATFORM_FEE_PERCENTAGE);
 
         return Math.round(totalCost * 100) / 100;
     }

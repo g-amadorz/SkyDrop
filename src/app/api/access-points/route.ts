@@ -27,14 +27,25 @@ export async function POST(request: NextRequest) {
         const accessPoint = await accessPointService.createAccessPoint(validatedData);
         return NextResponse.json({ success: true, data: accessPoint }, { status: 201 });
     } catch (error: any) {
+        console.error('Access point creation error:', error);
+        
         if (error.name === 'ZodError') {
             return NextResponse.json(
                 { success: false, error: 'Invalid input data', details: error.errors },
                 { status: 400 }
             );
         }
+        
+        // Mongoose validation error
+        if (error.name === 'ValidationError') {
+            return NextResponse.json(
+                { success: false, error: 'Database validation failed', details: error.message },
+                { status: 400 }
+            );
+        }
+        
         return NextResponse.json(
-            { success: false, error: 'Failed to create access point' },
+            { success: false, error: 'Failed to create access point', details: error.message },
             { status: 500 }
         );
     }

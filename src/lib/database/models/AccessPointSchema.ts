@@ -5,7 +5,6 @@ export interface IAccessPoint extends Document {
     name: string;
     nearestStation: string;
     account: mongoose.Types.ObjectId;
-    stationId: string; // Reference to SkyTrain station node in the network graph
     lat: Number;
     lng: Number;
 }
@@ -26,11 +25,6 @@ const AccessPointSchema: Schema<IAccessPoint> = new Schema(
             type: Schema.Types.ObjectId,
             ref: 'User',
         },
-        stationId: {
-            type: String,
-            required: [true, 'Station ID is required'],
-            trim: true,
-        },
         lat: {
             type: Number,
             required: [true, "Access point latitude required"],
@@ -45,6 +39,7 @@ const AccessPointSchema: Schema<IAccessPoint> = new Schema(
     }
 );
 
-const AccessPoint: Model<IAccessPoint> = mongoose.model<IAccessPoint>('AccessPoint', AccessPointSchema);
+const AccessPoint: Model<IAccessPoint> = 
+    mongoose.models.AccessPoint || mongoose.model<IAccessPoint>('AccessPoint', AccessPointSchema);
 
 export default AccessPoint;

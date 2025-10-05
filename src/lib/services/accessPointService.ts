@@ -25,8 +25,8 @@ export class AccessPointService {
         return await this.repository.findAccessPointByName(name);
     }
 
-    async findAccessPointsByStation(stationId: string) {
-        return await this.repository.findAccessPointsByStation(stationId);
+    async findAccessPointsByStation(stationName: string) {
+        return await this.repository.findAccessPointsByStation(stationName);
     }
 
     async findAccessPointsByAccount(accountId: string) {

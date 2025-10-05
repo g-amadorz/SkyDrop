@@ -14,17 +14,46 @@ export const AccesspointProvider = ({ children }) => {
     };
 
     // Accesspoint object
-    const create = ({ name, numProducts = 0, nearestStation, lat, lng }) => {
-        setAccessPoints(prev => {
-            const newAp = {
-                id: prev.length === 0 ? 0 : Math.max(...prev.map(ap => ap.id ?? 0)) + 1,
-                name,
-                nearestStation,
-                lat,
-                lng,
-            };
-            return [...prev, newAp];
-        });
+    const create = async ({ name, numProducts = 0, nearestStation, lat, lng }) => {
+        try {
+            const response = await fetch('/api/access-points', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    name,
+                    nearestStation,
+                    lat,
+                    lng,
+                }),
+            });
+
+            // Log the response for debugging
+            const responseText = await response.text();
+            console.log('API Response:', responseText);
+
+            if (!response.ok) {
+                let errorData;
+                try {
+                    errorData = JSON.parse(responseText);
+                } catch (e) {
+                    console.error('Non-JSON response:', responseText);
+                    throw new Error('Server returned non-JSON response');
+                }
+                throw new Error(errorData.error || 'Failed to create access point');
+            }
+
+            const { data } = JSON.parse(responseText);
+            
+            // Update local state with the created access point from MongoDB
+            setAccessPoints(prev => [...prev, data]);
+            
+            return data;
+        } catch (error) {
+            console.error('Error creating access point:', error);
+            throw error;
+        }
     };
 
     // Get access point by id
