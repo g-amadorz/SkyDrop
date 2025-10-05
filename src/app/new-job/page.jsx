@@ -25,7 +25,6 @@ import dynamic from "next/dynamic";
 import useMediaQuery from "@mui/material/useMediaQuery";
 import "leaflet/dist/leaflet.css";
 
-// Dynamically import Leaflet (no SSR)
 const MapContainer = dynamic(() => import("react-leaflet").then(mod => mod.MapContainer), { ssr: false });
 const TileLayer = dynamic(() => import("react-leaflet").then(mod => mod.TileLayer), { ssr: false });
 const Marker = dynamic(() => import("react-leaflet").then(mod => mod.Marker), { ssr: false });
@@ -54,11 +53,9 @@ const NewJob = () => {
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [snack, setSnack] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  // Track selected drop-off station for each job
   const [dropOffSelections, setDropOffSelections] = useState({});
-
-  // SSR-safe media query
   const [isMobile, setIsMobile] = useState(false);
+
   useEffect(() => {
     const check = () => setIsMobile(window.matchMedia("(max-width:900px)").matches);
     check();
@@ -66,11 +63,7 @@ const NewJob = () => {
     return () => window.removeEventListener('resize', check);
   }, []);
 
-
-  // Only show products with no commuterPN
   const availableProducts = products.filter(p => !p.commuterPN);
-
-  // Access points context
   const { accessPoints } = useAccesspoint ? useAccesspoint() : { accessPoints: [] };
 
   // Helper: if currApId is an access point, use its nearestStation
@@ -80,17 +73,14 @@ const NewJob = () => {
     return name;
   };
 
-  // Helper: get marker position for a job origin (station or access point)
   const getOriginLatLng = (name) => {
     const ap = accessPoints.find(ap => ap.name === name);
     if (ap && ap.lat && ap.lng) return [ap.lat, ap.lng];
     if (stationCoords[name]) return stationCoords[name];
-    // fallback: use nearestStation if available
     if (ap && ap.nearestStation && stationCoords[ap.nearestStation]) return stationCoords[ap.nearestStation];
     return null;
   };
 
-  // Basic phone validation (10 digits)
   const isValidPhone = /^\d{10}$/.test(phone);
 
   const handleClaim = (productId) => {
@@ -101,35 +91,37 @@ const NewJob = () => {
     }
   };
 
-  // Track which job popup is open
   const [openJobId, setOpenJobId] = useState(null);
-
-  // Get the path for the open job (if any)
   const openJob = openJobId ? availableProducts.find(j => j.id === openJobId) : null;
-  // Use selected drop-off for open job if set
+
+  // Compute path correctly using nearest stations
   let openPath = [];
+  let startAccessPoint = null;
+  let endAccessPoint = null;
+
   if (openJob) {
-    const { path } = bfsShortestPath(skytrainGraph, openJob.currApId, openJob.destApId);
+    const startStation = resolveToStation(openJob.currApId);
+    const endStation = resolveToStation(openJob.destApId);
+    const { path } = bfsShortestPath(skytrainGraph, startStation, endStation);
     const selectedDrop = dropOffSelections[openJob.id] || path[path.length - 1];
     const dropIdx = path.indexOf(selectedDrop);
     openPath = dropIdx > 0 ? path.slice(0, dropIdx + 1) : path;
+
+    // Keep reference if starting/ending point was an access point
+    startAccessPoint = accessPoints.find(ap => ap.name === openJob.currApId);
+    endAccessPoint = accessPoints.find(ap => ap.name === openJob.destApId);
   }
 
-  // Only show pickup (origin) markers for currApId, unless a path is being shown
   const markers = useMemo(() => {
-    // If a path is being shown, only show start and end pins
     if (openPath.length > 1) {
-      // For path display, show start and end pins (station or access point)
       const startLatLng = getOriginLatLng(openPath[0]);
       const endLatLng = getOriginLatLng(openPath[openPath.length - 1]);
       return [startLatLng, endLatLng].map((pos, idx) => {
         if (!pos) return null;
-        return (
-          <Marker key={String(pos) + idx} position={pos} />
-        );
+        return <Marker key={String(pos) + idx} position={pos} />;
       });
     }
-    // Otherwise, show all pickup markers as before
+
     const pickupStations = Array.from(new Set(availableProducts.map(p => p.currApId)));
     return pickupStations.map(name => {
       const pos = getOriginLatLng(name);
@@ -137,36 +129,35 @@ const NewJob = () => {
       const relatedJobs = availableProducts.filter(p => p.currApId === name);
       return (
         <Marker key={name} position={pos}>
-          <Popup
-            onOpen={() => setOpenJobId(null)}
-          >
+          <Popup onOpen={() => setOpenJobId(null)}>
             <Typography variant="subtitle1" fontWeight="bold">{name}</Typography>
             <Box sx={{ maxHeight: 300, overflowY: 'auto', width: 250 }}>
               {relatedJobs.map(job => {
-                // Get path for this job
-                const { path } = bfsShortestPath(skytrainGraph, resolveToStation(job.currApId), resolveToStation(job.destApId));
-                // Default drop-off is the last station
+                const { path } = bfsShortestPath(
+                  skytrainGraph,
+                  resolveToStation(job.currApId),
+                  resolveToStation(job.destApId)
+                );
                 const selectedDrop = dropOffSelections[job.id] || path[path.length - 1];
                 return (
                   <Card key={job.id} sx={{ my: 1 }}>
                     <CardContent sx={{ p: 1.5 }}>
                       <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', mb: 0.5, fontSize: '0.9rem' }}>
-                        <Typography variant="body2" component="span" sx={{ mr: 0.5, fontSize: '0.9rem' }}>
+                        <Typography variant="body2" component="span" sx={{ mr: 0.5 }}>
                           From <b>{job.currApId}</b> →
                         </Typography>
                         <Select
                           size="small"
                           value={selectedDrop}
                           onChange={e => setDropOffSelections(s => ({ ...s, [job.id]: e.target.value }))}
-                          sx={{ mx: 1, minWidth: 120, background: 'white', fontSize: '0.9rem' }}
-                          MenuProps={{ PaperProps: { sx: { fontSize: '0.9rem' } } }}
+                          sx={{ mx: 1, minWidth: 120, background: 'white' }}
                         >
                           {path.slice(1).map(station => (
-                            <MenuItem key={station} value={station} sx={{ fontSize: '0.9rem' }}>{station}</MenuItem>
+                            <MenuItem key={station} value={station}>{station}</MenuItem>
                           ))}
                         </Select>
                       </Box>
-                      <Typography variant="body2" sx={{ m: 0 }} style={{margin: "8px 0 0 0"}}>
+                      <Typography variant="body2" sx={{ m: 0, mt: 1 }}>
                         Hops: {bfsShortestPath(skytrainGraph, resolveToStation(job.currApId), selectedDrop).hops}
                       </Typography>
                     </CardContent>
@@ -174,26 +165,17 @@ const NewJob = () => {
                       <Button
                         size="small"
                         variant="contained"
-                        onClick={() => { handleClaim(job.id); }}
+                        onClick={() => handleClaim(job.id)}
                         disabled={selectedProduct === job.id || !isValidPhone}
                       >
                         {selectedProduct === job.id ? "Claimed" : "Claim"}
                       </Button>
                       {openJobId === job.id ? (
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          color="secondary"
-                          onClick={() => setOpenJobId(null)}
-                        >
+                        <Button size="small" variant="outlined" color="secondary" onClick={() => setOpenJobId(null)}>
                           Hide Path
                         </Button>
                       ) : (
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          onClick={() => setOpenJobId(job.id)}
-                        >
+                        <Button size="small" variant="outlined" onClick={() => setOpenJobId(job.id)}>
                           Show Path
                         </Button>
                       )}
@@ -208,12 +190,9 @@ const NewJob = () => {
     });
   }, [availableProducts, selectedProduct, phone, openJobId, openPath]);
 
-  // Job list component for desktop
   const JobList = (
     <Box sx={{ width: 280, p: 2 }}>
-      <Typography variant="h6" sx={{ mb: 2 }}>
-        Available Jobs
-      </Typography>
+      <Typography variant="h6" sx={{ mb: 2 }}>Available Jobs</Typography>
       <TextField
         label="Your Phone Number"
         value={phone}
@@ -226,9 +205,7 @@ const NewJob = () => {
       />
       <List>
         {availableProducts.length === 0 ? (
-          <ListItem>
-            <ListItemText primary="No jobs available" />
-          </ListItem>
+          <ListItem><ListItemText primary="No jobs available" /></ListItem>
         ) : (
           availableProducts.map((product) => {
             const hops = bfsShortestPath(
@@ -238,14 +215,12 @@ const NewJob = () => {
             ).hops;
             return (
               <ListItem key={product.id} divider alignItems="flex-start">
-                <Box sx={{ width: '100%', display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Box sx={{ width: '100%', display: 'flex', justifyContent: 'space-between' }}>
                   <Box>
                     <Typography variant="body1">
                       From: {product.currApId} → {product.destApId}
                     </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      Hops: {hops}
-                    </Typography>
+                    <Typography variant="body2" color="text.secondary">Hops: {hops}</Typography>
                   </Box>
                   <Button
                     size="small"
@@ -264,139 +239,94 @@ const NewJob = () => {
     </Box>
   );
 
-  // Job list component for mobile with close button inline with title
-  const JobListMobile = (
-    <Box sx={{ width: 280, p: 2 }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-        <Typography variant="h6" sx={{ mb: 0 }}>
-          Available Jobs
-        </Typography>
-        <IconButton
-          onClick={() => setDrawerOpen(false)}
-          sx={{ bgcolor: 'transparent', '&:hover': { bgcolor: 'transparent' }, m: 0, p: 1 }}
-          aria-label="Close menu"
-        >
-          <CloseIcon fontSize="large" />
-        </IconButton>
-      </Box>
-      <TextField
-        label="Your Phone Number"
-        value={phone}
-        onChange={(e) => setPhone(e.target.value)}
-        fullWidth
-        placeholder="e.g. 6041234567"
-        error={phone.length > 0 && !isValidPhone}
-        helperText={!isValidPhone && phone.length > 0 ? "Enter a valid 10-digit phone number" : ""}
-        sx={{ mb: 2 }}
-      />
-      <List>
-        {availableProducts.length === 0 ? (
-          <ListItem>
-            <ListItemText primary="No jobs available" />
-          </ListItem>
-        ) : (
-          availableProducts.map((product) => (
-            <ListItem key={product.id} divider alignItems="flex-start">
-              <Box sx={{ width: '100%', display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Box>
-                  <Typography variant="body1">
-                    From: {product.currApId} → {product.destApId}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Hops: {bfsShortestPath(skytrainGraph, product.currApId, product.destApId).hops}
-                  </Typography>
-                </Box>
-                <Button
-                  size="small"
-                  variant="contained"
-                  onClick={() => handleClaim(product.id)}
-                  disabled={selectedProduct === product.id || !isValidPhone}
-                >
-                  {selectedProduct === product.id ? "Claimed" : "Claim"}
-                </Button>
-              </Box>
-            </ListItem>
-          ))
-        )}
-      </List>
-    </Box>
-  );
-
   return (
     <Box sx={{ display: "flex", flexDirection: isMobile ? "column" : "row", height: "100vh" }}>
-      {/* Sidebar or Hamburger */}
       {isMobile ? (
         <>
-          <IconButton
-            onClick={() => setDrawerOpen(true)}
-            sx={{ position: "absolute", top: 10, right: 10, zIndex: 1000, bgcolor: "white" }}
-          >
+          <IconButton onClick={() => setDrawerOpen(true)} sx={{ position: "absolute", top: 10, right: 10, zIndex: 1000, bgcolor: "white" }}>
             <MenuIcon />
           </IconButton>
           <Drawer anchor="right" open={drawerOpen} onClose={() => setDrawerOpen(false)}>
-            {JobListMobile}
+            {JobList}
           </Drawer>
         </>
       ) : (
-        <Box
-          sx={{
-            flexShrink: 0,
-            width: 300,
-            borderRight: "1px solid #ddd",
-            height: "100%",
-            overflowY: "auto",
-            bgcolor: "#fafafa"
-          }}
-        >
+        <Box sx={{ flexShrink: 0, width: 300, borderRight: "1px solid #ddd", height: "100%", overflowY: "auto", bgcolor: "#fafafa" }}>
           {JobList}
         </Box>
       )}
 
-      {/* Map Section */}
       <Box sx={{ flexGrow: 1, position: 'relative' }}>
-        <MapContainer
-          center={[49.25, -123.1]}
-          zoom={11}
-          scrollWheelZoom={true}
-          style={{ height: "100%", width: "100%" }}
-        >
-          <TileLayer
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            attribution="&copy; OpenStreetMap contributors"
-          />
+        <MapContainer center={[49.25, -123.1]} zoom={11} scrollWheelZoom style={{ height: "100%", width: "100%" }}>
+          <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution="&copy; OpenStreetMap contributors" />
           {markers}
+
           {/* Draw path for open job */}
           {openPath.length > 1 && (
             <>
-              {/* Polyline for the path */}
+              {/* Polyline for stations */}
               <Polyline
-                positions={openPath.map(station => stationCoords[station])}
+                positions={openPath.map(node => {
+                  const ap = accessPoints.find(ap => ap.name === node);
+                  if (ap && ap.lat && ap.lng) return [ap.lat, ap.lng];
+                  if (stationCoords[node]) return stationCoords[node];
+                  return null;
+                }).filter(Boolean)}
                 pathOptions={{ color: 'blue', weight: 4 }}
               />
-              {/* Only show red pin for the selected drop-off, dots for intermediate */}
-              {openPath.map((station, idx) => {
-                if (idx === 0) return null; // skip start marker
-                const [lat, lng] = stationCoords[station];
-                let icon = undefined;
-                if (idx === openPath.length - 1) {
+
+              {/* Show line from AP → nearest station (start & end if needed) */}
+              {startAccessPoint && startAccessPoint.nearestStation && stationCoords[startAccessPoint.nearestStation] && (
+                <Polyline
+                  positions={[
+                    [startAccessPoint.lat, startAccessPoint.lng],
+                    stationCoords[startAccessPoint.nearestStation]
+                  ]}
+                  pathOptions={{ color: 'gray', dashArray: '4', weight: 2 }}
+                />
+              )}
+              {endAccessPoint && endAccessPoint.nearestStation && stationCoords[endAccessPoint.nearestStation] && (
+                <Polyline
+                  positions={[
+                    [endAccessPoint.lat, endAccessPoint.lng],
+                    stationCoords[endAccessPoint.nearestStation]
+                  ]}
+                  pathOptions={{ color: 'gray', dashArray: '4', weight: 2 }}
+                />
+              )}
+
+              {/* Markers */}
+              {openPath.map((node, idx) => {
+                const ap = accessPoints.find(ap => ap.name === node);
+                const pos = ap ? [ap.lat, ap.lng] : stationCoords[node];
+                if (!pos) return null;
+
+                let icon;
+                if (idx === 0) {
+                  icon = L.icon({
+                    iconUrl: '/marker-icon.png',
+                    iconSize: [25, 41],
+                    iconAnchor: [12.5, 41],
+                  });
+                } else if (idx === openPath.length - 1) {
                   icon = L.icon({
                     iconUrl: '/red-pin.png',
                     iconSize: [25, 41],
-                    iconAnchor: [12.5, 41]
+                    iconAnchor: [12.5, 41],
                   });
                 } else {
-                  icon = L.divIcon({ className: '', html: '<div style="width:12px;height:12px;background:#888;border-radius:50%;border:2px solid #fff;"></div>' });
+                  icon = L.divIcon({
+                    className: '',
+                    html: '<div style="width:10px;height:10px;background:#555;border-radius:50%;border:2px solid white;"></div>',
+                  });
                 }
-                return (
-                  <Marker key={station + idx} position={[lat, lng]} icon={icon} interactive={false} />
-                );
+                return <Marker key={node + idx} position={pos} icon={icon} interactive={false} />;
               })}
             </>
           )}
         </MapContainer>
       </Box>
 
-      {/* Snackbar */}
       <Snackbar open={snack} autoHideDuration={3000} onClose={() => setSnack(false)}>
         <Alert severity="success" sx={{ width: "100%" }}>
           Job claimed successfully!
