@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Outfit } from "next/font/google";
 import { Button, TextField } from "@mui/material";
@@ -16,7 +16,7 @@ export default function ProfilePage() {
   const [chargeAmount, setChargeAmount] = useState<number | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
-  // 💰 Conversion rate: 15 points = $1.50 → 1 point = $0.10
+  // 💰 Conversion rate: 10 pts = $1.00
   const dollarValue = (userPoints * 0.1).toFixed(2);
 
   const handleCharge = () => {
@@ -32,6 +32,14 @@ export default function ProfilePage() {
   const handleLogout = () => {
     setMessage("👋 Logged out");
   };
+
+  // ⏱ Message disappears automatically after 3s
+  useEffect(() => {
+    if (message) {
+      const timer = setTimeout(() => setMessage(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [message]);
 
   return (
     <motion.div
@@ -51,15 +59,21 @@ export default function ProfilePage() {
       {/* --- Points Display --- */}
       <div className="bg-blue-50 border border-blue-200 rounded-2xl shadow-sm p-6 mb-10 w-full max-w-md">
         <h2 className="text-2xl font-bold text-gray-800 mb-1">💰 Current Points</h2>
-        <p className="text-4xl font-extrabold text-blue-600 mb-2">
+
+        <motion.p
+          key={userPoints} // animate whenever userPoints changes
+          initial={{ scale: 0.8, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ duration: 0.3 }}
+          className="text-4xl font-extrabold text-blue-600 mb-2"
+        >
           {userPoints} pts
-        </p>
+        </motion.p>
+
         <p className="text-gray-700 text-lg font-semibold mb-3">
           ≈ ${dollarValue} USD
         </p>
-        <p className="text-gray-500 text-sm italic">
-          (💡 10 pts = $1.00)
-        </p>
+        <p className="text-gray-500 text-sm italic">(💡 10 pts = $1.00)</p>
       </div>
 
       {/* --- Charge Points Section --- */}
@@ -86,9 +100,10 @@ export default function ProfilePage() {
             Charge
           </Button>
         </div>
+
         {message && (
           <p
-            className={`text-sm font-medium ${
+            className={`text-sm font-medium transition ${
               message.startsWith("✅")
                 ? "text-green-600"
                 : message.startsWith("⚠️")

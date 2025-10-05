@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import dynamic from "next/dynamic";
 import { motion } from "framer-motion";
 import { Outfit } from "next/font/google";
@@ -24,7 +24,6 @@ export default function CommuterSection() {
   const { accessPoints } = useAccesspoint();
   const [origin, setOrigin] = useState("");
   const [destination, setDestination] = useState("");
-  const [availableJobs, setAvailableJobs] = useState<any[]>([]);
   const [selectedJob, setSelectedJob] = useState<any>(null);
   const [snack, setSnack] = useState(false);
 
@@ -49,41 +48,27 @@ export default function CommuterSection() {
     return ap?.nearestStation || name;
   };
 
-  // Calculate Route (hops + path)
+  // Calculate route (path + hops)
   const calculateRoute = (origin: string, destination: string) => {
     const start = resolveToStation(origin);
     const end = resolveToStation(destination);
     return bfsShortestPath(skytrainGraph, start, end);
   };
 
-  // Fake job data
-  const allJobs = [
-    { id: 1, origin: "Burrard (Station)", destination: "Commercial–Broadway (Station)", reward: 80 },
-    { id: 2, origin: "Main Street–Science World (Station)", destination: "Joyce–Collingwood (Station)", reward: 100 },
-    { id: 3, origin: "Waterfront (Station)", destination: "Metrotown (Station)", reward: 120 },
-  ];
-
+  // Always create one fake job when "Claim Jobs" is clicked
   const handleClaim = () => {
     if (!origin || !destination) return;
-    const start = resolveToStation(origin);
-    const end = resolveToStation(destination);
-
-    // Filter matching jobs
-    const jobs = allJobs.filter(
-      (j) =>
-        resolveToStation(j.origin) === start &&
-        resolveToStation(j.destination) === end
-    );
-
-    setAvailableJobs(jobs);
+    const job = {
+      id: 1,
+      origin,
+      destination,
+      reward: 100,
+    };
+    setSelectedJob(job);
     setSnack(true);
   };
 
-  const handleSelectJob = (job: any) => {
-    setSelectedJob(job);
-  };
-
-  // Animated Markers for Selected Job
+  // Animated route markers
   const markers = useMemo(() => {
     if (!selectedJob) return [];
     const { path } = calculateRoute(selectedJob.origin, selectedJob.destination);
@@ -91,6 +76,13 @@ export default function CommuterSection() {
     return path.map((node, idx) => {
       const pos = stationCoords[node];
       if (!pos) return null;
+
+      const color =
+        idx === 0
+          ? "#3B82F6" // start (blue)
+          : idx === path.length - 1
+          ? "#EF4444" // end (red)
+          : "#6B7280"; // gray midpoints
 
       return (
         <motion.div
@@ -102,9 +94,7 @@ export default function CommuterSection() {
             position={pos}
             icon={L.divIcon({
               className: "",
-              html: `<div style="width:14px;height:14px;background:${
-                idx === 0 ? "#3B82F6" : idx === path.length - 1 ? "#EF4444" : "#555"
-              };border-radius:50%;border:2px solid white;"></div>`,
+              html: `<div style="width:14px;height:14px;background:${color};border-radius:50%;border:2px solid white;"></div>`,
             })}
           />
         </motion.div>
@@ -133,14 +123,18 @@ export default function CommuterSection() {
           options={allOptions}
           getOptionLabel={(option) => option.label}
           onChange={(_, newValue) => setOrigin(newValue?.value || "")}
-          renderInput={(params) => <TextField {...params} label="Origin (Access Point or Station)" required />}
+          renderInput={(params) => (
+            <TextField {...params} label="Origin (Access Point or Station)" required />
+          )}
         />
 
         <Autocomplete
           options={allOptions}
           getOptionLabel={(option) => option.label}
           onChange={(_, newValue) => setDestination(newValue?.value || "")}
-          renderInput={(params) => <TextField {...params} label="Destination (Access Point or Station)" required />}
+          renderInput={(params) => (
+            <TextField {...params} label="Destination (Access Point or Station)" required />
+          )}
         />
 
         <button
@@ -151,35 +145,21 @@ export default function CommuterSection() {
         </button>
       </div>
 
-      {/* Available Jobs */}
-      {availableJobs.length > 0 && (
-        <div className="w-full max-w-3xl mb-10">
-          <p className="text-lg font-semibold text-gray-800 mb-4">
-            Available Jobs for this route:
-          </p>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {availableJobs.map((job) => (
-              <div
-                key={job.id}
-                onClick={() => handleSelectJob(job)}
-                className={`p-5 rounded-2xl border transition-all cursor-pointer ${
-                  selectedJob?.id === job.id
-                    ? "border-blue-500 bg-blue-50"
-                    : "border-gray-200 hover:border-blue-300"
-                }`}
-              >
-                <Typography variant="h6" fontWeight="bold" gutterBottom>
-                  {job.origin} → {job.destination}
-                </Typography>
-                <Typography color="text.secondary">
-                  Reward:{" "}
-                  <span className="font-semibold text-blue-600">
-                    {job.reward} pts
-                  </span>
-                </Typography>
-              </div>
-            ))}
-          </div>
+      {/* Selected Job Card */}
+      {selectedJob && (
+        <div className="w-full max-w-2xl mb-10 p-5 border border-blue-200 bg-blue-50 rounded-2xl shadow-sm text-left">
+          <Typography variant="h6" fontWeight="bold" gutterBottom>
+            Assigned Delivery Job
+          </Typography>
+          <Typography color="text.secondary">
+            {selectedJob.origin} → {selectedJob.destination}
+          </Typography>
+          <Typography sx={{ mt: 1 }}>
+            Reward:{" "}
+            <span className="font-semibold text-blue-600">
+              {selectedJob.reward} pts
+            </span>
+          </Typography>
         </div>
       )}
 
@@ -205,9 +185,13 @@ export default function CommuterSection() {
       )}
 
       {/* Snackbar Notification */}
-      <Snackbar open={snack} autoHideDuration={3000} onClose={() => setSnack(false)}>
+      <Snackbar
+        open={snack}
+        autoHideDuration={3000}
+        onClose={() => setSnack(false)}
+      >
         <Alert severity="success" sx={{ width: "100%" }}>
-          🎉 Jobs loaded successfully!
+          🎉 Job assigned successfully!
         </Alert>
       </Snackbar>
     </motion.div>

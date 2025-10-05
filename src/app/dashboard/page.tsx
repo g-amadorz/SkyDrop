@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Outfit } from "next/font/google";
 import ShipperSection from "./ShipperSection";
 import CommuterSection from "./CommuterSection";
-// import AccessPointSection from "./AccessPointSection"; // ✅ fixed import
+import AccessPointSection from "./AccesspointSection"; // ✅ fixed import
 
 const outfit = Outfit({
   subsets: ["latin"],

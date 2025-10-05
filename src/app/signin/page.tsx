@@ -87,12 +87,16 @@ export default function SigninPage() {
         </div>
 
         {/* Login Button */}
+      
+
+        <Link href="/dashboard">
         <button
           type="submit"
           className="w-full bg-gray-900 text-white py-4 rounded-full font-semibold text-lg hover:bg-black active:scale-95 transition-all"
         >
           Log In
         </button>
+        </Link>
 
         {/* Divider */}
         <div className="flex items-center justify-center my-2">
