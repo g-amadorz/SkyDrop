@@ -96,18 +96,27 @@ const NewJob = () => {
                     variant="contained"
                     onClick={() => { handleClaim(job.id); }}
                     disabled={selectedProduct === job.id || !isValidPhone}
-                    onMouseEnter={() => setOpenJobId(job.id)}
-                    onFocus={() => setOpenJobId(job.id)}
                   >
                     {selectedProduct === job.id ? "Claimed" : "Claim"}
                   </Button>
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    onClick={() => setOpenJobId(job.id)}
-                  >
-                    Show Path
-                  </Button>
+                  {openJobId === job.id ? (
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      color="secondary"
+                      onClick={() => setOpenJobId(null)}
+                    >
+                      Hide Path
+                    </Button>
+                  ) : (
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      onClick={() => setOpenJobId(job.id)}
+                    >
+                      Show Path
+                    </Button>
+                  )}
                 </CardActions>
               </Card>
             ))}
@@ -115,7 +124,7 @@ const NewJob = () => {
         </Marker>
       );
     });
-  }, [availableProducts, selectedProduct, phone]);
+  }, [availableProducts, selectedProduct, phone, openJobId]);
 
   // Get the path for the open job (if any)
   const openJob = openJobId ? availableProducts.find(j => j.id === openJobId) : null;
@@ -203,13 +212,21 @@ const NewJob = () => {
                 positions={openPath.map(station => stationCoords[station])}
                 pathOptions={{ color: 'blue', weight: 4 }}
               />
-              {/* Markers for each station in the path */}
+              {/* Only show red pin for the end station, dots for intermediate */}
               {openPath.map((station, idx) => {
+                if (idx === 0) return null; // skip start marker
                 const [lat, lng] = stationCoords[station];
                 let icon = undefined;
-                if (idx === 0) icon = L.icon({ iconUrl: '/blue-pin.png', iconSize: [32, 32], iconAnchor: [16, 32] });
-                else if (idx === openPath.length - 1) icon = L.icon({ iconUrl: '/red-pin.png', iconSize: [32, 32], iconAnchor: [16, 32] });
-                else icon = L.divIcon({ className: '', html: '<div style="width:12px;height:12px;background:#888;border-radius:50%;border:2px solid #fff;"></div>' });
+                  if (idx === openPath.length - 1) {
+                    // Use the correct aspect ratio for your red pin image (e.g., 41x25 or 82x50)
+                    icon = L.icon({
+                      iconUrl: '/green-pin.png',
+                      iconSize: [25, 41], // width, height (adjust if using 82x50)
+                      iconAnchor: [20, 25] // center bottom
+                    });
+                  } else {
+                    icon = L.divIcon({ className: '', html: '<div style="width:12px;height:12px;background:#888;border-radius:50%;border:2px solid #fff;"></div>' });
+                  }
                 return (
                   <Marker key={station + idx} position={[lat, lng]} icon={icon} interactive={false} />
                 );
