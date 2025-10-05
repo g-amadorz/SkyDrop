@@ -113,15 +113,69 @@ const NewJob = () => {
   }
 
   const markers = useMemo(() => {
+    // Path mode: show pins for APs, dots for nearest stations
     if (openPath.length > 1) {
-      const startLatLng = getOriginLatLng(openPath[0]);
-      const endLatLng = getOriginLatLng(openPath[openPath.length - 1]);
-      return [startLatLng, endLatLng].map((pos, idx) => {
-        if (!pos) return null;
-        return <Marker key={String(pos) + idx} position={pos} />;
-      });
+      const markersArr = [];
+      // Start
+      if (startAccessPoint) {
+        markersArr.push(
+          <Marker
+            key={"start-ap"}
+            position={[startAccessPoint.lat, startAccessPoint.lng]}
+            icon={L.icon({ iconUrl: '/marker-icon.png', iconSize: [25, 41], iconAnchor: [12.5, 41] })}
+          />
+        );
+        if (stationCoords[startAccessPoint.nearestStation]) {
+          markersArr.push(
+            <Marker
+              key={"start-dot"}
+              position={stationCoords[startAccessPoint.nearestStation]}
+              icon={L.divIcon({ className: '', html: '<div style="width:10px;height:10px;background:#555;border-radius:50%;border:2px solid white;"></div>' })}
+              interactive={false}
+            />
+          );
+        }
+      } else if (stationCoords[openPath[0]]) {
+        markersArr.push(
+          <Marker
+            key={"start-station"}
+            position={stationCoords[openPath[0]]}
+            icon={L.icon({ iconUrl: '/marker-icon.png', iconSize: [25, 41], iconAnchor: [12.5, 41] })}
+          />
+        );
+      }
+      // End
+      if (endAccessPoint) {
+        markersArr.push(
+          <Marker
+            key={"end-ap"}
+            position={[endAccessPoint.lat, endAccessPoint.lng]}
+            icon={L.icon({ iconUrl: '/red-pin.png', iconSize: [25, 41], iconAnchor: [12.5, 41] })}
+          />
+        );
+        if (stationCoords[endAccessPoint.nearestStation]) {
+          markersArr.push(
+            <Marker
+              key={"end-dot"}
+              position={stationCoords[endAccessPoint.nearestStation]}
+              icon={L.divIcon({ className: '', html: '<div style="width:10px;height:10px;background:#555;border-radius:50%;border:2px solid white;"></div>' })}
+              interactive={false}
+            />
+          );
+        }
+      } else if (stationCoords[openPath[openPath.length - 1]]) {
+        markersArr.push(
+          <Marker
+            key={"end-station"}
+            position={stationCoords[openPath[openPath.length - 1]]}
+            icon={L.icon({ iconUrl: '/red-pin.png', iconSize: [25, 41], iconAnchor: [12.5, 41] })}
+          />
+        );
+      }
+      return markersArr;
     }
 
+    // Otherwise, show all pickup markers as before
     const pickupStations = Array.from(new Set(availableProducts.map(p => p.currApId)));
     return pickupStations.map(name => {
       const pos = getOriginLatLng(name);
@@ -188,7 +242,7 @@ const NewJob = () => {
         </Marker>
       );
     });
-  }, [availableProducts, selectedProduct, phone, openJobId, openPath]);
+  }, [availableProducts, selectedProduct, phone, openJobId, openPath, startAccessPoint, endAccessPoint]);
 
   const JobList = (
     <Box sx={{ width: 280, p: 2 }}>
