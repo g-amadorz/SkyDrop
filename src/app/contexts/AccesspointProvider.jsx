@@ -46,7 +46,6 @@ export const AccesspointProvider = ({ children }) => {
 
             const { data } = JSON.parse(responseText);
             
-            // Update local state with the created access point from MongoDB
             setAccessPoints(prev => [...prev, data]);
             
             return data;
