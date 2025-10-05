@@ -15,10 +15,12 @@ export interface IProduct extends Document {
   };
   createdAt: Date;
   updatedAt: Date;
+  
 }
 
 const ProductSchema: Schema<IProduct> = new Schema(
-  {
+  { 
+    
     name: {
       type: String,
       required: [true, 'Package name is required'],
